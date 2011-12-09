@@ -20,7 +20,7 @@
 II - INSTALLATION
 
   1 - Prerequisites
-    You need to have Ocaml and the svn's trunk version of Coq (>rXXXXX) 
+    You need to have Ocaml and the svn's trunk version of Coq (>r14783) 
 installed. The COQBIN (/usr/local/bin/ by default) and the COQDIR (/usr/local/
 by default) environment varaibles must be set prior to use this plugin.
 
