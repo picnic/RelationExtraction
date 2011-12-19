@@ -1,6 +1,6 @@
 Name: RelationExtraction
 Title: Functions extraction from inductive relations
-Author: Pierre-Nicolas Tollitte
+Author: Catherine Dubois, David Delahaye, Pierre-Nicolas Tollitte
 Institution: CNAM-ENSIIE, Paris, France
 Date: 2011
 Description: This plugin introduces a new set of extraction commands that
