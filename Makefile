@@ -20,13 +20,18 @@
 NOARG: all
 
 # 
-# This Makefile may take COQBIN as argument passed as environment variables:
-#  to specify the directory where Coq binaries resides;
-Makefile-localvars.gen:
-	$(COQBIN)coqtop -config > $@
+# This Makefile may take arguments passed as environment variables:
+# COQBIN to specify the directory where Coq binaries resides;
+# ZDEBUG/COQDEBUG to specify debug flags for ocamlc&ocamlopt/coqc;
+# DSTROOT to specify a prefix to install path.
 
--include Makefile-localvars.gen
-.SECONDARY: Makefile-localvars.gen
+# Here is a hack to make $(eval $(shell works:
+define donewline
+
+
+endef
+includecmdwithout@ = $(eval $(subst @,$(donewline),$(shell { $(1) | tr '\n' '@'; })))
+$(call includecmdwithout@,$(COQBIN)coqtop -config)
 
 ##########################
 #                        #
@@ -88,6 +93,15 @@ CAMLP4EXTEND?=pa_extend.cmo pa_macro.cmo q_MLast.cmo
 CAMLP4OPTIONS?=
 PP?=-pp "$(CAMLP4BIN)$(CAMLP4)o -I $(CAMLLIB) -I . $(COQSRCLIBS) $(CAMLP4EXTEND) $(GRAMMARS) $(CAMLP4OPTIONS) -impl"
 
+#################
+#               #
+# Install Paths #
+#               #
+#################
+
+COQLIBINSTALL=${COQLIB}/user-contrib
+COQDOCINSTALL=${DOCDIR}/user-contrib
+
 ###################################
 #                                 #
 # Definition of the "all" target. #
@@ -95,25 +109,46 @@ PP?=-pp "$(CAMLP4BIN)$(CAMLP4)o -I $(CAMLLIB) -I . $(COQSRCLIBS) $(CAMLP4EXTEND)
 ###################################
 
 ML4FILES:=g_relation_extraction.ml4
+
+-include $(addsuffix .d,$(ML4FILES))
+.SECONDARY: $(addsuffix .d,$(ML4FILES))
+
 MLFILES:=relation_extraction.ml\
+  fixpointgen.ml\
+  fixpred.ml\
   minimlgen.ml\
   host2spec.ml\
   coq_stuff.ml\
   pred.ml
-CMOFILES:=$(ML4FILES:.ml4=.cmo) $(MLFILES:.ml=.cmo)
-CMXFILES:=$(CMOFILES:.cmo=.cmx)
-OFILES:=$(CMXFILES:.cmx=.o)
+
+-include $(addsuffix .d,$(MLFILES))
+.SECONDARY: $(addsuffix .d,$(MLFILES))
+
 MLLIBFILES:=relation_extraction_plugin.mllib
-CMAFILES:=$(MLLIBFILES:.mllib=.cma)
-CMXAFILES:=$(CMAFILES:.cma=.cmxa)
+
+-include $(addsuffix .d,$(MLLIBFILES))
+.SECONDARY: $(addsuffix .d,$(MLLIBFILES))
+
 MLIFILES:=relation_extraction.mli\
+  fixpointgen.mli\
+  fixpred.mli\
   minimlgen.mli\
   host2spec.mli\
   coq_stuff.mli\
   pred.mli\
   host_stuff.mli
-CMIFILES:=$(sort $(CMOFILES:.cmo=.cmi) $(MLIFILES:.mli=.cmi))
-CMXSFILES:=$(CMXFILES:.cmx=.cmxs) $(CMXAFILES:.cmxa=.cmxs)
+
+-include $(addsuffix .d,$(MLIFILES))
+.SECONDARY: $(addsuffix .d,$(MLIFILES))
+
+ALLCMOFILES:=$(ML4FILES:.ml4=.cmo) $(MLFILES:.ml=.cmo)
+CMOFILES=$(filter-out $(addsuffix .cmo,$(foreach lib,$(MLLIBFILES:.mllib=_MLLIB_DEPENDENCIES) $(MLPACKFILES:.mlpack=_MLPACK_DEPENDENCIES),$($(lib)))),$(ALLCMOFILES))
+CMXFILES=$(CMOFILES:.cmo=.cmx)
+OFILES=$(CMXFILES:.cmx=.o)
+CMAFILES:=$(MLLIBFILES:.mllib=.cma)
+CMXAFILES:=$(CMAFILES:.cma=.cmxa)
+CMIFILES=$(sort $(ALLCMOFILES:.cmo=.cmi) $(MLIFILES:.mli=.cmi))
+CMXSFILES=$(CMXFILES:.cmx=.cmxs) $(CMXAFILES:.cmxa=.cmxs)
 
 all: $(CMOFILES) $(CMAFILES) $(if ifeq '$(HASNATDYNLINK)' 'true',$(CMXSFILES)) \
   ./test
@@ -211,35 +246,35 @@ opt:
 
 install-natdynlink:
 	for i in $(CMXSFILES); do \
-	 install -d `dirname $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i`; \
-	 install $$i $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i; \
+	 install -d `dirname $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i`; \
+	 install -m 0644 $$i $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i; \
 	done
 
 install:$(if ifeq '$(HASNATDYNLINK)' 'true',install-natdynlink)
 	for i in $(CMOFILES); do \
-	 install -d `dirname $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i`; \
-	 install $$i $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i; \
+	 install -d `dirname $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i`; \
+	 install -m 0644 $$i $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i; \
 	done
 	for i in $(CMIFILES); do \
-	 install -d `dirname $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i`; \
-	 install $$i $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i; \
+	 install -d `dirname $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i`; \
+	 install -m 0644 $$i $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i; \
 	done
 	for i in $(CMAFILES); do \
-	 install -d `dirname $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i`; \
-	 install $$i $(DSTROOT)$(COQLIB)user-contrib/RelationExtraction/$$i; \
+	 install -d `dirname $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i`; \
+	 install -m 0644 $$i $(DSTROOT)$(COQLIBINSTALL)/RelationExtraction/$$i; \
 	done
 	(cd ./test; $(MAKE) DSTROOT=$(DSTROOT) INSTALLDEFAULTROOT=$(INSTALLDEFAULTROOT)/./test install)
 
 install-doc:
-	install -d $(DSTROOT)$(DOCDIR)user-contrib/RelationExtraction/mlihtml
+	install -d $(DSTROOT)$(COQDOCINSTALL)/RelationExtraction/mlihtml
 	for i in mlihtml/*; do \
-	 install $$i $(DSTROOT)$(DOCDIR)user-contrib/RelationExtraction/$$i;\
+	 install -m 0644 $$i $(DSTROOT)$(COQDOCINSTALL)/RelationExtraction/$$i;\
 	done
 
 clean:
-	rm -f *~ Makefile-localvars.gen
-	rm -f $(CMOFILES) $(CMIFILES) $(CMXFILES) $(CMAFILES) $(CMXAFILES) $(CMXSFILES) $(OFILES)
-	rm -f $(MLFILES:.ml=.ml.d) $(MLIFILES:.mli=.mli.d) $(ML4FILES:.ml4=.ml4.d) $(MLLIBFILES:.mllib=.mllib.d)
+	rm -f $(ALLCMOFILES) $(CMIFILES) $(CMAFILES)
+	rm -f $(ALLCMOFILES:.cmo=.cmx) $(CMXAFILES) $(CMXSFILES) $(ALLCMOFILES:.cmo=.o) $(CMXAFILES:.cmxa=.a)
+	rm -f $(addsuffix .d,$(MLFILES) $(MLIFILES) $(ML4FILES) $(MLLIBFILES) $(MLPACKFILES))
 	rm -f all.ps all-gal.ps all.pdf all-gal.pdf all.glob $(VFILES:.v=.glob) $(VFILES:.v=.tex) $(VFILES:.v=.g.tex) all-mli.tex
 	- rm -rf html mlihtml
 	- rm -rf 
@@ -250,8 +285,8 @@ archclean:
 	(cd ./test ; $(MAKE) archclean)
 
 
-printenv: Makefile-localvars.gen
-	@cat $^
+printenv:
+	@$(COQBIN)coqtop -config
 	@echo CAMLC =	$(CAMLC)
 	@echo CAMLOPTC =	$(CAMLOPTC)
 	@echo PP =	$(PP)
@@ -262,18 +297,6 @@ Makefile: Make
 	$(COQBIN)coq_makefile -f $< -o $@
 
 	(cd ./test ; $(MAKE) Makefile)
-
--include $(MLFILES:.ml=.ml.d)
-.SECONDARY: $(MLFILES:.ml=.ml.d)
-
--include $(MLIFILES:.mli=.mli.d)
-.SECONDARY: $(MLIFILES:.mli=.mli.d)
-
--include $(ML4FILES:.ml4=.ml4.d)
-.SECONDARY: $(ML4FILES:.ml4=.ml4.d)
-
--include $(MLLIBFILES:.mllib=.mllib.d)
-.SECONDARY: $(MLLIBFILES:.mllib=.mllib.d)
 
 # WARNING
 #

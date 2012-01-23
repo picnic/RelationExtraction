@@ -25,3 +25,6 @@ val gen_miniml : (htyp, henv) extract_env -> unit
 
 (* Get rel index from a binders list. *)
 val get_rel : 'a -> 'a list -> int
+
+(* Tests if a mode is full. *)
+val is_full_extraction : mode -> bool

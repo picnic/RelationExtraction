@@ -44,4 +44,3 @@ val adapt_mode : Libnames.reference -> int list -> int list
    adapt_mode may be invoked prior to this function. *)
 val make_mode : Libnames.global_reference -> (int list) option -> mode
 
-

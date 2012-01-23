@@ -167,10 +167,15 @@ match kind_of_term term with
     let env = add_cstr_to_env env constr h in
     MLTConstr (constr, args), env
   | Construct _ ->
-    let _, i = destConstruct term in
+    let ind, i = destConstruct term in
     let it_constrs = find_it_constrs term in
     let constr = List.nth it_constrs (i-1) in
-    let env = add_cstr_to_env env constr term in
+    (* Add all the constructors to env. *)
+    let env, _ = List.fold_left (fun (env, i) constr ->
+      let construct = mkConstruct (ind, i) in
+      (add_cstr_to_env env constr construct, i+1)
+    ) (env, 1) it_constrs in
+(*    let env = add_cstr_to_env env constr term in*)
     MLTConstr (constr, []), env
   | App (h, args) -> 
     let args, _ = filter_impargs_cstr h args (Array.to_list args) in
@@ -256,7 +261,17 @@ let rec build_premisse (env, id_spec) named_prod term =
         let a, env = build_term (env, id_spec) named_prod (Some t) a in
         a::args, env
       ) args typs ([], env) in
-      (PMTerm (fake_type env (MLTFun (id, args, Some mode))))::pred_terms, env
+      (* A premisse term must be typed with its output type (for fixpred). 
+         If there are several outputs, we use a fake type. *)
+      let prem_term = MLTFun (id, args, Some mode) in
+      let prem_term_type = match get_out_terms_func env (fake_type env prem_term) with
+        | [t, ty] -> ty
+        | [] ->
+          (CTSum [ident_of_string "true";ident_of_string "false"], 
+            Some (constr_of_global 
+              (locate (qualid_of_string "Coq.Init.Datatypes.bool"))))
+        | _ -> unknown_type env in
+      (PMTerm ((prem_term, prem_term_type)))::pred_terms, env
     ) modes ([], env) in
     let env = add_indgref_to_env env id ind_gref in
     begin match pred_terms with

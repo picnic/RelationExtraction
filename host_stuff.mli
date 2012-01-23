@@ -25,13 +25,18 @@
 
 (* Type information for a term. This is kept into the AST. *)
 type 'htyp host_term_type = 'htyp
+val th : 'htyp -> 'htyp host_term_type
+val ht : 'htyp host_term_type -> 'htyp
 
 (* Environment for host stuff. *)
 type 'henv host_env = 'henv
+val he : 'henv -> 'henv host_env
+val eh : 'henv host_env -> 'henv
 
 (* Functions for host langage manipulations. *)
 type ('htyp, 'henv) host_functions = {
   h_get_fake_type : unit -> 'htyp host_term_type;
+  h_get_bool_type : unit -> string list * 'htyp host_term_type;
 }
 
 

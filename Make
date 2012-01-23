@@ -24,6 +24,10 @@ host2spec.mli
 host2spec.ml
 minimlgen.mli
 minimlgen.ml
+fixpred.mli
+fixpred.ml
+fixpointgen.mli
+fixpointgen.ml
 relation_extraction.mli
 relation_extraction.ml
 g_relation_extraction.ml4

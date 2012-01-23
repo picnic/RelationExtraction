@@ -33,6 +33,8 @@ open Extract_env
 open Table
 open Pred
 open Coq_stuff
+open Fixpred
+open Fixpointgen
 
 
 (************************)
@@ -84,6 +86,7 @@ let extract_relation_common dep ord ind_ref modes =
     extr_fixfuns = [];
     extr_henv = henv;
     extr_hf = coq_functions;
+    extr_compl = [];
   } in
   let env = Host2spec.find_specifications empty_env in
   (*Printf.eprintf "%s\n" (pp_extract_env env);*)
@@ -95,25 +98,37 @@ let extract_relation_common dep ord ind_ref modes =
   in
   let env = Pred.make_ml_funs env in
   (*Printf.eprintf "%s\n" (pp_extract_env env);*)
+  env
 
+let extract_relation_miniml dep ord ind_ref modes =
+  let env = extract_relation_common dep ord ind_ref modes in
   (* Before generating the MiniML code, we first extract all the dependences *)
   let _ = if dep then extract_dependencies env.extr_henv else () in
 
   Minimlgen.gen_miniml env
 
+
 let relation_extraction_single ind_ref modes =
-  extract_relation_common false false [ind_ref] modes
+  extract_relation_miniml false false [ind_ref] modes
 
 let relation_extraction_single_order ind_ref modes =
-  extract_relation_common false true [ind_ref] modes
+  extract_relation_miniml false true [ind_ref] modes
 
 let relation_extraction ind_ref modes =
-  extract_relation_common true false (List.map fst modes) modes
+  extract_relation_miniml true false (List.map fst modes) modes
 
 let relation_extraction_order ind_ref modes =
-  extract_relation_common true true (List.map fst modes) modes
+  extract_relation_miniml true true (List.map fst modes) modes
 
-let relation_extraction_fixpoint = relation_extraction
+let relation_extraction_fixpoint ind_ref modes =
+  let env = extract_relation_common false false (List.map fst modes) modes in
+  let ids = List.map fst env.extr_mlfuns in
+  
+Printf.eprintf "%s\n" (pp_extract_env env);
+
+  let env = build_all_fixfuns env in
+List.iter (fun (_, f) -> Printf.eprintf "%s\n\n" (pp_fix_fun f)) env.extr_fixfuns
+  ;gen_fixpoint env
 
 
 (* DEBUG: Displaying a constant idr:
@@ -125,8 +140,5 @@ let cstr = match cst_body.Declarations.const_body with
 constr_display cstr *)
 
  
-let relation_extraction_fixpoint idr modes =
-  let _ = idr, modes in ()
-
 let extraction_print str =
   Printf.printf "%s\n" str

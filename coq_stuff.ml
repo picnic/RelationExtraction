@@ -19,6 +19,8 @@
 
 open Host_stuff
 open Pred
+open Libnames
+open Nametab
 
 type htyp = Term.types option
 
@@ -30,8 +32,12 @@ type henv = {
 
 let coq_get_fake_type () = None
 
+let coq_get_bool_type () = (["true"; "false"], 
+  Some (constr_of_global (locate (qualid_of_string "Coq.Init.Datatypes.bool"))) )
+
 let coq_functions = {
   h_get_fake_type = coq_get_fake_type;
+  h_get_bool_type = coq_get_bool_type;
 }
 
 

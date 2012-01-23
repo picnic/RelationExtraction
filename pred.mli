@@ -99,6 +99,8 @@ and 'htyp ml_term = ('htyp untyped_ml_term, 'htyp) typed
 
 (* Pretty printer *)
 val pp_ml_term : 'htyp ml_term -> string
+(*DEBUG*)
+val pp_ml_pat : 'htyp ml_pat -> string
 
 
 (******************)
@@ -186,6 +188,7 @@ type 'htyp fix_fun = {
   fixfun_body : 'htyp fix_term;
 }
 
+val pp_fix_term : 'htyp fix_term -> string
 val pp_fix_fun : 'htyp fix_fun -> string
 
 
@@ -219,6 +222,8 @@ type ('htyp, 'henv) extract_env = {
   extr_henv : 'henv host_env;
   (* Functions for the host language stuff. *)
   extr_hf : ('htyp, 'henv) host_functions;
+  (* Does extracted functions need to be completed for fixpoint extraction. *)
+  extr_compl : (ident * bool) list;
 }
 
 val extr_get_modes : ('t, 'h) extract_env -> ident -> mode list
@@ -227,6 +232,9 @@ val extr_get_spec_ord : ('t, 'h) extract_env -> ident -> bool
 val extr_get_tree : ('t, 'h) extract_env -> ident -> 't tree
 val extr_get_mlfun : ('t, 'h) extract_env -> ident -> 't ml_fun
 val extr_get_fixfun : ('t, 'h) extract_env -> ident -> 't fix_fun
+
+(* Gets the completion status of a function (for the fixpred library). *)
+val get_completion_status : ('t, 'h) extract_env -> ident -> bool
 
 val pp_extract_env : ('t, 'h) extract_env -> string
 
@@ -245,4 +253,5 @@ val make_ml_funs : ('t, 'h) extract_env -> ('t, 'h) extract_env
 (*val make_fix_funs : ('t, 'h) extract_env -> ('t, 'h) extract_env*)
 
 
-
+val get_in_terms_func : ('t, 'h) extract_env -> 't ml_term -> 't ml_term list
+val get_out_terms_func : ('t, 'h) extract_env -> 't ml_term -> 't ml_term list

@@ -83,7 +83,7 @@ type mode_option =
 type mode = mode_option list
 
 let string_of_mode mode = 
-  if List.for_all (fun mo -> mo != MOutput) mode then ""
+  if List.for_all (fun mo -> mo != MOutput) mode then "_full"
   else let rec rec_som mode i =  match mode with
     | [] -> ""
     | MInput::tl_mode -> (string_of_int i) ^ (rec_som tl_mode (i+1))
@@ -134,7 +134,7 @@ let rec pp_untyped_ml_pat pat = match pat with
   | MLPAFalse -> "false"
   | MLPANone -> "None" 
   | MLPASome p -> "Some (" ^ (pp_ml_pat p) ^ ")"
-and pp_ml_pat (pat, _) = pp_untyped_ml_pat pat
+and pp_ml_pat (pat, ty) = pp_untyped_ml_pat pat ^ match ty with (CTSum _, _) -> "*" | _ -> ""
 
 let rec pp_ml_untyped_term inc term = match term with
   | MLTVar i -> "@" ^ string_of_ident i
@@ -162,7 +162,7 @@ let rec pp_ml_untyped_term inc term = match term with
   | MLTANone -> "None" 
   | MLTASome t -> "Some (" ^ (pp_ml_term_aux inc t) ^ ")"
   | MLTADefault -> "default_case"
-and pp_ml_term_aux inc (t, _) = pp_ml_untyped_term inc t
+and pp_ml_term_aux inc (t, ty) = pp_ml_untyped_term inc t ^ match ty with (CTSum _, _) -> "*" | _ -> ""
 and pp_ml_pattern inc (pat, term) = 
   inc ^ "| " ^ (pp_ml_pat pat) ^ " -> " ^ (pp_ml_term_aux inc term) ^ "\n"
 let pp_ml_term t = pp_ml_term_aux "" t
@@ -309,7 +309,8 @@ let rec pp_fix_untyped_term inc t = match t with
   | FixFalse -> "False"
   | FixLetin (i, l, t) -> "let " ^ string_of_ident i ^ " = " ^ 
     pp_fix_term_aux inc l ^ " in " ^ pp_fix_term_aux inc t
-and pp_fix_term_aux inc (t, _) = pp_fix_untyped_term inc t
+and pp_fix_term_aux inc (t, ty) = pp_fix_untyped_term inc t ^ "{" ^ 
+                                 (pp_term_type ty) ^ "}"
 and pp_fix_term t = pp_fix_term_aux "" t
 
 let pp_fix_fun fixfun =
@@ -331,6 +332,7 @@ type ('htyp, 'henv) extract_env = {
   extr_fixfuns : (ident * 'htyp fix_fun) list;
   extr_henv : 'henv host_env;
   extr_hf : ('htyp, 'henv) host_functions;
+  extr_compl : (ident * bool) list;
 }
 
 let extr_get_modes env i =
@@ -343,6 +345,9 @@ let extr_get_spec_ord env i =
 let extr_get_tree env i = List.assoc i env.extr_trees
 let extr_get_mlfun env i = List.assoc i env.extr_mlfuns
 let extr_get_fixfun env i = List.assoc i env.extr_fixfuns
+
+let get_completion_status env id =
+  try List.assoc id env.extr_compl with Not_found -> false
 
 let pp_extract_env env =
   "(********* Modes *********)\n\n" ^
@@ -428,10 +433,11 @@ let rename_var i mapping = if List.mem_assoc i mapping then
 let rec find_renaming_terms mapping (term,_) (ref_term,_) = 
 match term, ref_term with
   | (MLTConst i1, MLTConst i2) when i1 = i2 -> mapping
-  | (MLTVar i1, MLTVar i2) -> if List.mem_assoc i1 mapping then
-      if (rename_var i1 mapping) = i2 then mapping else failwith "impossible"
-    else
-      (i1, i2)::mapping
+  | (MLTVar i1, MLTVar i2) -> 
+(* TODO: verify that 2 variables are not renamed to the same variable. *)
+      if (rename_var i1 mapping) = i2 then mapping else 
+      if List.mem_assoc i1 mapping then failwith "impossible"
+      else (i1, i2)::mapping
   | (MLTTuple tl1, MLTTuple tl2) | (MLTRecord (_, tl1), MLTRecord (_, tl2)) ->
     List.fold_left2 find_renaming_terms mapping tl1 tl2
   | (MLTConstr (i1, tl1), MLTConstr (i2, tl2)) when i1 = i2 ->
@@ -509,7 +515,10 @@ let rename_inputs_if_possible env nt tn prop =  match nt, tn with
                                                          when i=ri && m=rm ->
     let ts, refts = get_in_terms_func env t, get_in_terms_func env rt in
     let mapping = find_renaming ts refts in
-    (rename_nt mapping nt, rename_prop mapping prop)
+(*maybe we can't rename inputs...*)
+if List.length mapping > 0 then failwith "impossible"
+else (nt, prop)
+(*    (rename_nt mapping nt, rename_prop mapping prop) *)
   | _ ->  failwith "impossible"
 
   
@@ -873,14 +882,18 @@ let rec select_out_args_types types mode = match types, mode with
   | _ -> []
 
 let gen_match_term env id_extr nt = match nt with
-  | NTPrem (MLTFun (a, _, None), _) -> gen_tuple env (get_in_terms env nt)
-  | NTConcl (MLTFun (pn, _, Some m), _) | NTPrem (MLTFun (pn, _, Some m), _) ->
+  | NTPrem (MLTFun (a, _, None), ty) -> gen_tuple env (get_in_terms env nt)
+  | NTConcl (MLTFun (pn, _, Some m), ty) | NTPrem (MLTFun (pn, _, Some m), ty) ->
     let in_terms = get_in_terms env nt in
     if string_of_ident pn = "eq" && List.exists ((=) MOutput) m then
       List.hd in_terms
     else
       let fn = get_pred_name env pn m in
-      fake_type env (MLTFun (fn, in_terms, None))
+      let ty = if List.for_all ((!=) MOutput) m then 
+        let cl, t = env.extr_hf.h_get_bool_type () in
+        (CTSum (List.map ident_of_string cl), t)
+      else ty in
+      (MLTFun (fn, in_terms, None), ty)
 (*      let spec = extr_get_spec env pn in
       let args_types =
       match pdt.pdt_pred.pred_args_types with
