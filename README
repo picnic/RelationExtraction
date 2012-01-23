@@ -14,13 +14,16 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011 Pierre-Nicolas Tollitte <tollitte@ensiie.fr> CNAM-ENSIIE *)
+(*  Copyright 2011 CNAM-ENSIIE                                              *)
+(*                 Catherine Dubois <dubois@ensiie.fr>                      *)
+(*                 David Delahaye <david.delahaye@cnam.fr>                  *)
+(*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
 (****************************************************************************)
 
 II - INSTALLATION
 
   1 - Prerequisites
-    You need to have Ocaml and the svn's trunk version of Coq (>rXXXXX) 
+    You need to have Ocaml and the svn's trunk version of Coq (>r14783) 
 installed. The COQBIN (/usr/local/bin/ by default) and the COQDIR (/usr/local/
 by default) environment varaibles must be set prior to use this plugin.
 
