@@ -12,12 +12,12 @@ let res =
       (Add.Succ (Add.Succ (Add.Succ Add.Zero))));
     assert (Add.add12 Add.Zero Add.Zero = Add.Zero);
     assert (Add.add12 Add.Zero (Add.Succ Add.Zero) = (Add.Succ Add.Zero));
-    assert (Add.add Add.Zero (Add.Succ Add.Zero) (Add.Succ Add.Zero) = true);
-    assert (Add.add (Add.Succ Add.Zero) Add.Zero (Add.Succ Add.Zero) = true);
-    assert (Add.add (Add.Succ Add.Zero) (Add.Succ Add.Zero) 
+    assert (Add.add_full Add.Zero (Add.Succ Add.Zero) (Add.Succ Add.Zero) = true);
+    assert (Add.add_full (Add.Succ Add.Zero) Add.Zero (Add.Succ Add.Zero) = true);
+    assert (Add.add_full (Add.Succ Add.Zero) (Add.Succ Add.Zero) 
       (Add.Succ (Add.Succ Add.Zero)) = true);
-    assert (Add.add (Add.Succ Add.Zero) Add.Zero Add.Zero = false);
-    assert (Add.add Add.Zero Add.Zero (Add.Succ Add.Zero) = false);
+    assert (Add.add_full (Add.Succ Add.Zero) Add.Zero Add.Zero = false);
+    assert (Add.add_full Add.Zero Add.Zero (Add.Succ Add.Zero) = false);
 
     (* Simple imperative language *)
     let prog = Imp.Sequ (Imp.Affect (Imp.A, Imp.ESucc Imp.EZero),
@@ -42,10 +42,10 @@ let res =
     assert (So.test12 So.B So.A = So.D);
 
     (* Mutual induction *)
-    assert (Odd.even (Odd.S (Odd.S Odd.O)) = true);
-    assert (Odd.even (Odd.S Odd.O) = false);
-    assert (Odd.odd (Odd.S Odd.O) = true);
-    assert (Odd.odd (Odd.S (Odd.S Odd.O)) = false);
+    assert (Odd.even_full (Odd.S (Odd.S Odd.O)) = true);
+    assert (Odd.even_full (Odd.S Odd.O) = false);
+    assert (Odd.odd_full (Odd.S Odd.O) = true);
+    assert (Odd.odd_full (Odd.S (Odd.S Odd.O)) = false);
 
     (* Output tuples *)
     assert (Tuples.eval12 (Tuples.EInc Tuples.A) 

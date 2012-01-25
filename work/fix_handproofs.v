@@ -97,23 +97,95 @@ Inductive list_len : list A -> nat -> Prop :=
 End List_predicates.
 
 Extraction Relation Fixpoint add [1 2].
-Print add12.
 Extraction Relation Fixpoint add [1 3].
-Print add13.
-
 Extraction Relation Fixpoint exec [1 2] with eval [1 2].
-Print eval12.
-Print exec12.
-
 Extraction Relation Fixpoint even [1].
-Print even_full.
 Extraction Relation Fixpoint even_comp [1].
-Print even_comp1.
-(* TODO: Inductives with parameters
-Extraction Relation Fixpoint list_len [1].
-Print list_len1.
-Extraction Relation Fixpoint list_len [1 2].
-Print list_len_full.
+
+(* --- Basic proofs --- *)
+
+(* add12 *)
+Functional Scheme add12_ind := Induction for add12 Sort Prop.
+(*
+add 12: 2 branches
+(let ...) match p1 with | Zero => let fix_5 := p2 in (match ...) fix_5 : add0
+(let ...) match p1 with | Succ fix_6 => let fix_7 := p2 in (match ...) 
+  let fix_8 := add12 fix_6 fix_7 in (match ...) Succ fix_8 : addSucc
 *)
+Lemma add12_correct : forall p1 p2 p3, add12 p1 p2 = p3 -> add p1 p2 p3.
+Proof.
+intros p1 p2 p3.
+intro H.
+rewrite <- H.
+apply add12_ind.
+
+(* add0 *)
+simpl.
+intros.
+apply add0; assumption.
+
+(* add1 *)
+simpl.
+intros.
+apply addSucc; assumption.
+
+Qed.
+
+(* eval12 *)
+Functional Scheme eval12_ind := Induction for eval12 Sort Prop.
+(*
+evalZero
+evalSucc
+evalVar
+evalTrue
+evalFalse
+*)
+Lemma eval12_correct : forall p1 p2 p3, eval12 p1 p2 = p3 -> eval p1 p2 p3.
+Proof.
+intros p1 p2 p3.
+intro H.
+rewrite <- H.
+apply eval12_ind; simpl; intros.
+apply evalZero; assumption.
+apply evalSucc; assumption.
+apply evalVar; assumption.
+apply evalTrue; assumption.
+apply evalFalse; assumption.
+Qed.
+
+(* even_comp1 *)
+Functional Scheme even_comp1_ind := Induction for even_comp1 Sort Prop.
+(*
+even_compZ
+even_compO
+even_compN
+*)
+Lemma even_comp1_correct : forall p1 p2, even_comp1 p1 = p2 -> even_comp p1 p2.
+Proof.
+intros p1 p2.
+intro H.
+rewrite <- H.
+apply even_comp1_ind; simpl; intros.
+apply even_compZ; assumption.
+apply even_compO; assumption.
+apply even_compN; assumption.
+Qed.
+
+(* --- Full mode proofs --- *)
+
+(* even_full *)
+(*Lemma even_full_correct : forall n, even_full n = true -> even n.*)
+(*Lemma even_full_complete : forall n, even n -> even_full n = true.*)
+
+(* --- Completed functions proofs --- *)
+
+(* add13 *)
+Functional Scheme add13_ind := Induction for add13 Sort Prop.
+(*Lemma add13_correct : forall p1 p2 p3, add13 p1 p2 = Some p3 -> add p1 p2 p3.
+Proof.
+intros p1 p2 p3.*)
+
+(* exec12 *)
+(*Lemma exec12_correct : forall p1 p2 p3, exec12 p1 p2 = Some p3 -> exec p1 p2 p3.*)
 
 

@@ -86,7 +86,6 @@ let adapt_mode ind_ref mode =
     | Names.Anonymous -> false
     | _ -> true ) parameters in
   let param_nb = List.length fil in
-Printf.eprintf "nb_params : %d\n" param_nb;
   let mode = List.map (fun i -> i + param_nb) mode in
   (gen_param_args param_nb) @ mode
 
