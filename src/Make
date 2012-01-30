@@ -16,6 +16,8 @@ test: $(RELEXTR_PLUGIN).cma $(RELEXTR_PLUGIN).cmxs
 
 RELEXTR_PLUGIN = "relation_extraction_plugin"
 host_stuff.mli
+proof_scheme.mli
+proof_scheme.ml
 pred.mli
 pred.ml
 coq_stuff.mli
@@ -26,6 +28,10 @@ minimlgen.mli
 minimlgen.ml
 fixpred.mli
 fixpred.ml
+reltacs.mli
+reltacs.ml
+proofgen.mli
+proofgen.ml
 fixpointgen.mli
 fixpointgen.ml
 relation_extraction.mli

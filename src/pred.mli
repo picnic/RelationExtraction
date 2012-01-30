@@ -21,6 +21,7 @@
 (****************************************************************************)
 
 open Host_stuff
+open Proof_scheme
 
 (* Extraction failure with some reason. *)
 exception RelationExtractionError of string
@@ -33,6 +34,19 @@ exception RelationExtractionError of string
 type ident
 val string_of_ident : ident -> string
 val ident_of_string : string -> ident
+
+
+(*************************)
+(* Annotation for proofs *)
+(*************************)
+
+type annot_atom = {
+  pa_prop_name : ident;
+  pa_renamings : (ident * ident) list; (* new & old variable name *)
+}
+
+(* An annot_atom for each constructor (of the Inductive). *)
+type pannot = annot_atom list
 
 
 (*********)
@@ -87,7 +101,8 @@ type 'htyp untyped_ml_term =
     (* The "mode option" must be None for function and Some (...) for 
        predicates. *)
 (* -- End: used by the specification -- *)
-  | MLTMatch of 'htyp ml_term * ('htyp ml_pat * 'htyp ml_term) list
+  | MLTMatch of 'htyp ml_term * pannot * 
+    ('htyp ml_pat * 'htyp ml_term * pannot) list
 
 (* Additionnal stuff *)
   (* Used for linearization. ml_terms are always variables. *)
@@ -175,8 +190,9 @@ type 'htyp fix_untyped_term =
   | FixConst of ident
   | FixFun of ident * 'htyp fix_term list
   | FixFunNot of ident * 'htyp fix_term list
-  | FixCase of 'htyp fix_term * (ident list * 'htyp fix_term) list
-  | FixLetin of ident * 'htyp fix_term * 'htyp fix_term
+  | FixCase of 'htyp fix_term * pannot * 
+               (ident list * 'htyp fix_term * pannot) list
+  | FixLetin of ident * 'htyp fix_term * 'htyp fix_term * pannot
 
 (* To be converted as standard constructions. *)
   | FixSome of 'htyp fix_term
@@ -220,7 +236,7 @@ type ('htyp, 'henv) extract_env = {
   (* List of ml functions translated from the predicate trees. *)
   extr_mlfuns : (ident * 'htyp ml_fun) list;
   (* List of fix functions compiled from the ml functions. *)
-  extr_fixfuns : (ident * 'htyp fix_fun) list;
+  extr_fixfuns : (ident * ('htyp fix_fun * ('htyp fix_term) proof_scheme)) list;
   (* Environment for the host language stuff. *)
   extr_henv : 'henv host_env;
   (* Functions for the host language stuff. *)
@@ -234,7 +250,8 @@ val extr_get_spec : ('t, 'h) extract_env -> ident -> 't spec
 val extr_get_spec_ord : ('t, 'h) extract_env -> ident -> bool
 val extr_get_tree : ('t, 'h) extract_env -> ident -> 't tree
 val extr_get_mlfun : ('t, 'h) extract_env -> ident -> 't ml_fun
-val extr_get_fixfun : ('t, 'h) extract_env -> ident -> 't fix_fun
+val extr_get_fixfun : ('t, 'h) extract_env -> ident -> 
+                      ('t fix_fun * ('t fix_term) proof_scheme)
 
 (* Gets the completion status of a function (for the fixpred library). *)
 val get_completion_status : ('t, 'h) extract_env -> ident -> bool
@@ -253,7 +270,6 @@ exception RelationExtractionProp of ident option * string
 val make_trees : ('t, 'h) extract_env -> ('t, 'h) extract_env
 
 val make_ml_funs : ('t, 'h) extract_env -> ('t, 'h) extract_env
-(*val make_fix_funs : ('t, 'h) extract_env -> ('t, 'h) extract_env*)
 
 
 val get_in_terms_func : ('t, 'h) extract_env -> 't ml_term -> 't ml_term list

@@ -14,26 +14,35 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011, 2012 CNAM-ENSIIE                                        *)
+(*  Copyright 2012 CNAM-ENSIIE                                              *)
 (*                 Catherine Dubois <dubois@ensiie.fr>                      *)
 (*                 David Delahaye <david.delahaye@cnam.fr>                  *)
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
 (****************************************************************************)
 
-open Pred
 
-exception RelExtNoFixTuple
-exception RelExtImcompleteFunction
+open Term
+open Names
+open Libnames
+open Nametab
+open Util
+open Pp
 
-(**************)
-(* Algorithms *)
-(**************)
+open Proof_scheme
+open Coq_stuff
 
-(* Tries to build all fix_fun from ml_fun. Pattern-matchings are compiled.
-   Functions are completed if needed. *)
-val build_all_fixfuns : 
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env ->
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env 
 
+let do_simpl_proof_prop prop_cstr =
+  Pfedit.by Tactics.simpl_in_concl;
+  Pfedit.by Tactics.intros;
+  Pfedit.by (Tacticals.tclTHEN (Tactics.apply (prop_cstr)) Tactics.assumption)
+
+let do_simpl_proof ps ind inputs output =
+  Pfedit.by (Tactics.intros_using ((List.map id_of_string inputs)@[id_of_string output]));
+  Pfedit.by Tactics.intros;
+  Pfedit.by (Equality.subst [id_of_string output]);
+  Pfedit.by (Tactics.apply (find_coq_constr_s ind));
+  List.iter (fun b -> match b.psb_prop_name with
+    | Some pn -> do_simpl_proof_prop (find_coq_constr_s pn)
+    | _ -> assert false
+  ) ps.scheme_branches

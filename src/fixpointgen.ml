@@ -25,6 +25,8 @@
 open Pred
 open Fixpred
 open Coq_stuff
+open Minimlgen
+open Proofgen
 
 open Term
 open Names
@@ -65,38 +67,6 @@ let rec find_args_types sty = match kind_of_term sty with
     ) constrs
   | _ -> anomalylabstrm "RelationExtraction" (str "Not an inductive type")
 
-(* Get the type of the arguments of an extracted function. *)
-let get_in_types (env, id) =
-  let rec get_in_rec args mode = match (args, mode) with
-    | (a::tl_args, MInput::tl_mode) -> a::(get_in_rec tl_args tl_mode)
-    | (_::tl_args, MOutput::tl_mode) -> get_in_rec tl_args tl_mode
-    | (_, MSkip::tl_mode) -> get_in_rec args tl_mode
-    | _ -> [] in
-  let mode = List.hd (extr_get_modes env id) in
-  let args_types = (extr_get_spec env id).spec_args_types in
-  get_in_rec args_types mode
-
-(* Gets the output type of an extracted function,
-   ignoring the eventual completion with the type option when opt is false. *)
-let get_out_type opt (env, id) =
-  let fun_name = (extr_get_mlfun env id).mlfun_name in 
-  let comp = get_completion_status env fun_name in
-  let rec get_out_rec args mode = match (args, mode) with
-    | (a::tl_args, MOutput::tl_mode) -> a::(get_out_rec tl_args tl_mode)
-    | (_::tl_args, MInput::tl_mode) -> get_out_rec tl_args tl_mode
-    | (_, MSkip::tl_mode) -> get_out_rec args tl_mode
-    | _ -> [] in
-  let mode = List.hd (extr_get_modes env id) in
-  let args_types = (extr_get_spec env id).spec_args_types in
-  match get_out_rec args_types mode with
-    | [] -> constr_of_global 
-              (locate (qualid_of_string "Coq.Init.Datatypes.bool"))
-    | (_ , Some t)::_ -> if opt && comp then
-      let opt = constr_of_global 
-              (locate (qualid_of_string "Coq.Init.Datatypes.option")) in
-      mkApp (opt, [|t|])
-      else t
-    | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
 
 
 (* Gets the parameter type of an option type. *)
@@ -133,7 +103,7 @@ let rec gen_constr (env, id) fn bind (fterm,_) = match fterm with
     mkApp (c, args)
   | FixFunNot _ -> 
     anomalylabstrm "RelationExtraction" (str "Not: Not implanted yet")
-  | FixCase ((_, (_, Some sty)) as t, iltl) -> 
+  | FixCase ((_, (_, Some sty)) as t, _, iltl) -> 
     let ind, oib = match kind_of_term sty with
       | App (c,_) -> (match kind_of_term c with
         | Ind ind -> 
@@ -146,7 +116,7 @@ let rec gen_constr (env, id) fn bind (fterm,_) = match fterm with
     let npar = if string_of_id oib.mind_typename = "option" then 1 else 0 in
       (* The option type has one parameter. 
          TODO: support parameters in other inductives. *)
-    let args_nb = List.map (fun (il, _) -> List.length il) iltl in
+    let args_nb = List.map (fun (il, _, _) -> List.length il) iltl in
     let args_tab = Array.of_list args_nb in
     let case_inf = { 
       ci_ind = ind;
@@ -157,7 +127,7 @@ let rec gen_constr (env, id) fn bind (fterm,_) = match fterm with
     } in
     let cstrs_arg_types = find_args_types sty in
     let ty = mkLambda (Anonymous, sty, (get_out_type true (env,id))) in
-    let ta = Array.of_list (List.map2 (fun (il, t) tyl ->
+    let ta = Array.of_list (List.map2 (fun (il, t, _) tyl ->
       let nbind = (List.rev il) @ bind in
       List.fold_right2 (fun i ty t -> 
         mkLambda (Name (id_of_string (string_of_ident i)), ty, t)
@@ -178,17 +148,12 @@ let rec gen_constr (env, id) fn bind (fterm,_) = match fterm with
     (locate (qualid_of_string "Coq.Init.Datatypes.true"))
   | FixFalse -> constr_of_global
     (locate (qualid_of_string "Coq.Init.Datatypes.false"))
-  | FixLetin (i, (l,(ty, Some sty)), t) ->
+  | FixLetin (i, (l,(ty, Some sty)), t, _) ->
     mkLetIn (Name (id_of_string (string_of_ident i)), 
       (gen_constr (env,id) fn bind (l,(ty, Some sty))), sty,
       (gen_constr (env,id) fn (i::bind) t))
   | FixLetin _ -> anomalylabstrm "RelationExtraction" 
     (str "Missing type information in let in")
-
-(* Gets the Coq type from a term_type. *)
-let get_coq_type (_,t) = match t with
-  | Some ct -> ct
-  | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
 
 (* Generates the type of an extracted function. *)
 let gen_fix_type (env,id) args =
@@ -201,7 +166,7 @@ let gen_fix_type (env,id) args =
 
 (* Generates and registers Coq Fixpoints. *)
 let gen_fixpoint_bis env =
-  let glbs = List.map (fun (i, f) ->
+  let glbs = List.map (fun (i, (f, _)) ->
     let (fn, args, t) = f.fixfun_name, f.fixfun_args, f.fixfun_body in
     let c = gen_constr (env,i) fn (List.rev args) t in
     let typs = get_in_types (env, i) in
@@ -221,7 +186,21 @@ let gen_fixpoint_bis env =
   let cst_body = Global.lookup_constant cst in
   let cstr = match cst_body.Declarations.const_body with 
   | Def cs -> Declarations.force cs in
-  ()
+
+  (* proof generation in simple cases *)
+  (* By now, only very basic cases are supported. We try to build the proof only
+     in those cases. *)
+(* Proof generation temporary desactivated... *)
+(*  let _ = List.iter (fun (id, _) -> 
+    let mode = List.hd (extr_get_modes env id) in
+    let (fixfun, _) = extr_get_fixfun env id in
+    let compl = get_completion_status env fixfun.fixfun_name in
+    let full = is_full_extraction mode in
+    if (not compl) && (not full) then
+      gen_proof_compl_simple env id 
+    else ()
+  ) env.extr_extractions in
+*)  ()
 
 (* Generates and registers Coq Fixpoints. *)
 let gen_fixpoint env = 

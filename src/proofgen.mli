@@ -14,26 +14,22 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011, 2012 CNAM-ENSIIE                                        *)
+(*  Copyright 2012 CNAM-ENSIIE                                              *)
 (*                 Catherine Dubois <dubois@ensiie.fr>                      *)
 (*                 David Delahaye <david.delahaye@cnam.fr>                  *)
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
 (****************************************************************************)
 
 open Pred
+open Proof_scheme
+open Coq_stuff
 
-exception RelExtNoFixTuple
-exception RelExtImcompleteFunction
+(********************)
+(* Proof generation *)
+(********************)
 
-(**************)
-(* Algorithms *)
-(**************)
+(* Generates the lemma and the associated proof in very basic cases. 
+   The function must be complete and extracted in partial maode. *)
+val gen_proof_compl_simple : (htyp, henv) extract_env -> ident -> unit
 
-(* Tries to build all fix_fun from ml_fun. Pattern-matchings are compiled.
-   Functions are completed if needed. *)
-val build_all_fixfuns : 
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env ->
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env 
 

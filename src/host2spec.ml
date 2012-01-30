@@ -267,7 +267,8 @@ let rec build_premisse (env, id_spec) named_prod term =
       (* A premisse term must be typed with its output type (for fixpred). 
          If there are several outputs, we use a fake type. *)
       let prem_term = MLTFun (id, args, Some mode) in
-      let prem_term_type = match get_out_terms_func env (fake_type env prem_term) with
+      let prem_term_type = match get_out_terms_func env 
+        (fake_type env prem_term) with
         | [t, ty] -> ty
         | [] ->
           (CTSum [ident_of_string "true";ident_of_string "false"], 

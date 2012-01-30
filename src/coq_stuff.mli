@@ -39,11 +39,28 @@ val coq_functions : (htyp, henv) host_functions
 (* Extraction of dependencies *)
 val extract_dependencies : henv -> unit
 
+(*********)
+(* Utils *)
+(*********)
+
 (* Mode adapter for parameters. Must be used on all modes given by the user. *)
 val adapt_mode : Libnames.reference -> int list -> int list
 
-(* Mode conversion, with skipers for implicit arguments. If the mode is not provided,
-   it returns the full mode.
+(* Mode conversion, with skipers for implicit arguments. 
+   If the mode is not provided, it returns the full mode.
    adapt_mode may be invoked prior to this function. *)
 val make_mode : Libnames.global_reference -> (int list) option -> mode
 
+(* Get the type of the arguments of an extracted function. *)
+val get_in_types : (htyp, henv) extract_env * ident -> htyp term_type list
+
+(* Gets the output type of an extracted function,
+   ignoring the eventual completion with the type option when opt is false. *)
+val get_out_type : bool -> (htyp, henv) extract_env * ident -> Term.types
+
+(* Gets the Coq type from a term_type. *)
+val get_coq_type : htyp term_type -> Term.types
+
+(* Find a Coq constr from its name (as an ident or a string) *)
+val find_coq_constr_i : ident -> Term.constr
+val find_coq_constr_s : string -> Term.constr

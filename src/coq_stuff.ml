@@ -24,6 +24,9 @@ open Host_stuff
 open Pred
 open Libnames
 open Nametab
+open Term
+open Util
+open Pp
 
 type htyp = Term.types option
 
@@ -36,7 +39,7 @@ type henv = {
 let coq_get_fake_type () = None
 
 let coq_get_bool_type () = (["true"; "false"], 
-  Some (constr_of_global (locate (qualid_of_string "Coq.Init.Datatypes.bool"))) )
+  Some (constr_of_global (locate (qualid_of_string "Coq.Init.Datatypes.bool"))))
 
 let coq_functions = {
   h_get_fake_type = coq_get_fake_type;
@@ -133,4 +136,45 @@ let make_mode ind_glb user_mode =
         MInput::(rec_mode tl_args (i+1))
       else MOutput::(rec_mode tl_args (i+1)) in
   rec_mode args 1
+
+
+let get_in_types (env, id) =
+  let rec get_in_rec args mode = match (args, mode) with
+    | (a::tl_args, MInput::tl_mode) -> a::(get_in_rec tl_args tl_mode)
+    | (_::tl_args, MOutput::tl_mode) -> get_in_rec tl_args tl_mode
+    | (_, MSkip::tl_mode) -> get_in_rec args tl_mode
+    | _ -> [] in
+  let mode = List.hd (extr_get_modes env id) in
+  let args_types = (extr_get_spec env id).spec_args_types in
+  get_in_rec args_types mode
+
+let get_out_type opt (env, id) =
+  let fun_name = (extr_get_mlfun env id).mlfun_name in 
+  let comp = get_completion_status env fun_name in
+  let rec get_out_rec args mode = match (args, mode) with
+    | (a::tl_args, MOutput::tl_mode) -> a::(get_out_rec tl_args tl_mode)
+    | (_::tl_args, MInput::tl_mode) -> get_out_rec tl_args tl_mode
+    | (_, MSkip::tl_mode) -> get_out_rec args tl_mode
+    | _ -> [] in
+  let mode = List.hd (extr_get_modes env id) in
+  let args_types = (extr_get_spec env id).spec_args_types in
+  match get_out_rec args_types mode with
+    | [] -> constr_of_global 
+              (locate (qualid_of_string "Coq.Init.Datatypes.bool"))
+    | (_ , Some t)::_ -> if opt && comp then
+      let opt = constr_of_global 
+              (locate (qualid_of_string "Coq.Init.Datatypes.option")) in
+      mkApp (opt, [|t|])
+      else t
+    | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
+
+let get_coq_type (_,t) = match t with
+  | Some ct -> ct
+  | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
+
+let find_coq_constr_s s = 
+  constr_of_global (locate (qualid_of_string s))
+
+let find_coq_constr_i i = 
+  find_coq_constr_s (string_of_ident i)
 

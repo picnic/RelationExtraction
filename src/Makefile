@@ -115,11 +115,14 @@ ML4FILES:=g_relation_extraction.ml4
 
 MLFILES:=relation_extraction.ml\
   fixpointgen.ml\
+  proofgen.ml\
+  reltacs.ml\
   fixpred.ml\
   minimlgen.ml\
   host2spec.ml\
   coq_stuff.ml\
-  pred.ml
+  pred.ml\
+  proof_scheme.ml
 
 -include $(addsuffix .d,$(MLFILES))
 .SECONDARY: $(addsuffix .d,$(MLFILES))
@@ -131,11 +134,14 @@ MLLIBFILES:=relation_extraction_plugin.mllib
 
 MLIFILES:=relation_extraction.mli\
   fixpointgen.mli\
+  proofgen.mli\
+  reltacs.mli\
   fixpred.mli\
   minimlgen.mli\
   host2spec.mli\
   coq_stuff.mli\
   pred.mli\
+  proof_scheme.mli\
   host_stuff.mli
 
 -include $(addsuffix .d,$(MLIFILES))

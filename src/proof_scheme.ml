@@ -14,26 +14,59 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011, 2012 CNAM-ENSIIE                                        *)
+(*  Copyright 2012 CNAM-ENSIIE                                              *)
 (*                 Catherine Dubois <dubois@ensiie.fr>                      *)
 (*                 David Delahaye <david.delahaye@cnam.fr>                  *)
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
 (****************************************************************************)
 
-open Pred
+(* Proof scheme declaration *)
 
-exception RelExtNoFixTuple
-exception RelExtImcompleteFunction
+type pident = {
+  pi_func_name : string;
+  pi_spec_name : string option;
+}
 
-(**************)
-(* Algorithms *)
-(**************)
+type 't ps_atom =
+  | LetVar of (pident * 't)
+  | CaseConstr of ('t * string * pident list)
+  | LetDum of (pident * 't)
+  | CaseDum of ('t * string * pident list)
+  | OutputTerm of 't option
 
-(* Tries to build all fix_fun from ml_fun. Pattern-matchings are compiled.
-   Functions are completed if needed. *)
-val build_all_fixfuns : 
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env ->
-  (Term.constr option Host_stuff.host_term_type Host_stuff.host_term_type, 
-  Coq_stuff.henv Host_stuff.host_env Host_stuff.host_env) extract_env 
+type 't ps_branch = {
+  psb_prop_name : string option;
+  psb_branch : 't ps_atom list;
+}
+
+type 't proof_scheme = {
+  scheme_branches : 't ps_branch list;
+}
+
+let rec concat_list l sep = match l with
+  | [] -> ""
+  | [a] -> a
+  | a::tl -> a ^ sep ^ (concat_list tl sep)
+
+let pp_pident pi = match pi.pi_spec_name with
+  | None -> pi.pi_func_name
+  | Some s -> pi.pi_func_name ^ "{" ^ s ^ "}"
+
+let pp_proof_scheme pp_t ps = concat_list (List.map (fun b ->
+    begin match b.psb_prop_name with
+      | Some pn -> pn
+      | None -> "%default%" end ^ ": " ^
+    concat_list (List.map (fun a -> match a with
+      | LetVar (pi, t) -> "LetVar (" ^ pp_pident pi ^ ", " ^ pp_t t ^ ")"
+      | LetDum (pi, t) -> "LetDum (" ^ pp_pident pi ^ ", " ^ pp_t t ^ ")"
+      | CaseConstr (t, s, pil) -> "CaseConstr (" ^ pp_t t ^ ", " ^ s ^ ", (" ^ 
+         concat_list (List.map pp_pident pil) ", " ^ "))"
+      | CaseDum (t, s, pil) -> "CaseDum (" ^ pp_t t ^ ", " ^ s ^ ", (" ^ 
+         concat_list (List.map pp_pident pil) ", " ^ "))"
+      | OutputTerm (Some t) -> "OutputTerm (" ^ pp_t t ^ ")"
+      | OutputTerm (None) -> "OutputTerm (None)"
+    ) b.psb_branch) " -> "
+  ) ps.scheme_branches) "\n"
+
+
 

@@ -38,6 +38,7 @@ open Pred
 open Coq_stuff
 open Fixpred
 open Fixpointgen
+open Proof_scheme
 
 
 (************************)
@@ -127,10 +128,10 @@ let relation_extraction_fixpoint ind_ref modes =
   let env = extract_relation_common false false (List.map fst modes) modes in
   let ids = List.map fst env.extr_mlfuns in
   
-(*Printf.eprintf "%s\n" (pp_extract_env env);*)
+Printf.eprintf "%s\n" (pp_extract_env env);
 
   let env = build_all_fixfuns env in
-(*List.iter (fun (_, f) -> Printf.eprintf "%s\n\n" (pp_fix_fun f)) env.extr_fixfuns;*)
+(*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
   gen_fixpoint env
 
 

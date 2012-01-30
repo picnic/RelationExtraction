@@ -24,6 +24,7 @@ open Pred
 open Coq_stuff
 open Host_stuff
 open Minimlgen
+open Proof_scheme
 
 open Term
 open Names
@@ -62,24 +63,26 @@ let rec rename_var_term oi ni (t, ty) = match t with
   | MLTFun (i, tl, m) -> MLTFun (i, List.map (rename_var_term oi ni) tl, m), ty
   | MLTFunNot (i, tl, m) -> 
     MLTFunNot (i, List.map (rename_var_term oi ni) tl, m), ty
-  | MLTMatch (t, ptl) -> MLTMatch (rename_var_term oi ni t, 
-    List.map (fun (p,t) -> 
-      rename_var_pattern oi ni p, rename_var_term oi ni t) ptl), ty
+  | MLTMatch (t, an, ptl) -> MLTMatch (rename_var_term oi ni t, an,
+    List.map (fun (p,t,an) -> 
+      rename_var_pattern oi ni p, rename_var_term oi ni t, an) ptl), ty
   | MLTALin _ -> anomalylabstrm "RelationExtraction" (str "Not implanted yet")
   | _ -> t, ty
 
 (* Extracts the first column of a patterns matrix. *)
 let rec extract_one_col pltl = match pltl with
   | [] -> [], []
-  | (p::pl_tail, t)::pltl_tail -> let col, npltl = extract_one_col pltl_tail in
-    p::col, (pl_tail,t)::npltl
+  | (p::pl_tail, t, an)::pltl_tail -> 
+    let col, npltl = extract_one_col pltl_tail in
+    p::col, (pl_tail,t,an)::npltl
   | _ -> assert false
 
 
 (* Merges a column into a patterns matrix. *)
-let merge_col pl pltl = List.map2 (fun p (pl, t) -> p::pl, t) pl pltl
+let merge_col pl pltl = List.map2 (fun p (pl, t, an) -> p::pl, t, an) pl pltl
 (* Same function but with list of patterns in the "column". *)
-let merge_cols pll pltl = List.map2 (fun pl2 (pl, t) -> pl2@pl, t) pll pltl
+let merge_cols pll pltl = 
+  List.map2 (fun pl2 (pl, t, an) -> pl2@pl, t, an) pll pltl
 
 (* Explodes tuples into a patterns matrix. *)
 let rec normalize_pltl_tuples tl pltl = match tl with
@@ -101,7 +104,7 @@ let rec normalize_pltl_tuples tl pltl = match tl with
  and must not contain any tuple. 
  If there is a default case, it is removed. *)
 let rec normalize_pltl tl pltl =
-  let npltl = List.filter (fun (pl, t) ->
+  let npltl = List.filter (fun (pl, t, an) ->
     List.for_all (function MLPWild, _ -> false | _ -> true) pl
   ) pltl in
   normalize_pltl_tuples tl npltl
@@ -153,7 +156,8 @@ let coq_type_explorer env cstr = match kind_of_term cstr with
     let (n, _) = decompose_prod oib.mind_user_lc.(i-1) in
     let n = List.map (typ_from_named env ind) (List.rev n) in
 (*basic imp args filter, TODO: unification with the host2spec algorithm ?*)
-    let imp = match Impargs.implicits_of_global (Libnames.global_of_constr cstr) with
+    let imp = match Impargs.implicits_of_global (
+        Libnames.global_of_constr cstr) with
       | (_,a)::_ -> a
       | _ -> [] in
     let filter = fun a -> not (Impargs.is_status_implicit a) in
@@ -181,7 +185,7 @@ let rec get_cstr_arity_and_types env cstr pltl = match pltl with
       anomalylabstrm "RelationExtraction" 
       (str "Cannot find a constructor in the extraction environment") in
     coq_type_explorer env cstr
-  | ((MLPConstr (c, args), _)::_, _)::_ when c = cstr ->
+  | ((MLPConstr (c, args), _)::_, _, _)::_ when c = cstr ->
     (List.length args, List.map snd args)
   | _::pltl_tail -> get_cstr_arity_and_types env cstr pltl_tail
 
@@ -195,13 +199,14 @@ let filter_next_pats pltl tl =
         npll, ntl
       else List.map2 (fun pl npl -> (List.hd pl)::npl) pll npll, t::ntl 
     with _ -> assert false in
-  let filtered_pll, ntl = filter_pll (List.map (fun (pl, t) -> pl) pltl) tl in
-  (List.map2 (fun pl (_,t) -> pl, t) filtered_pll pltl, ntl)
+  let filtered_pll, ntl = 
+    filter_pll (List.map (fun (pl, t, an) -> pl) pltl) tl in
+  (List.map2 (fun pl (_,t,an) -> pl, t, an) filtered_pll pltl, ntl)
 
 (* Compiles a normalized pattern matching. *)
 let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
   | [] -> begin match pltl with
-    | [[], t] -> build_fix_term comp (env, id_fun) binded_vars t
+    | [[], t, _] -> build_fix_term comp (env, id_fun) binded_vars t
                (* no more terms to match *)
     | _ -> assert false
   end
@@ -211,28 +216,35 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
     (* match mt with the first pattern of every pl present in pltl *)
 
     (* are there any variables or constructors in the patterns ? *)
-    let is_variables = List.exists (fun (pl, _) -> match pl with 
+    let is_variables = List.exists (fun (pl, _, _) -> match pl with 
       | p::_ -> (match p with | MLPVar _, _ -> true | _ -> false)
       | _ -> assert false) pltl in
-    let is_constrs = List.exists (fun (pl, _) -> match pl with 
+    let is_constrs = List.exists (fun (pl, _, _) -> match pl with 
       | p::_ -> (match p with | MLPConstr _, _ -> true | _ -> false)
       | _ -> assert false) pltl in
-
+    let an = flatmap (fun (_, _, an) -> an) pltl in
     let nmt, lams, npltl = if is_variables then 
         let nvar = ident_of_string (get_fresh_var ()) in
-        (* if there is at least one variable: we create a variable for the letin *)
-        let npltl = List.map ( fun (pl, t) -> match pl with
+        (* if there is at least one variable: we create a variable for 
+                                                                    the letin *)
+        let npltl = List.map ( fun (pl, t, an) -> match pl with
           | (MLPVar v, vty)::pl_tail -> 
-                (MLPWild, vty)::pl_tail, rename_var_term v nvar t
+                (MLPWild, vty)::pl_tail, rename_var_term v nvar t, an
           (* then we replace each occurence of the variables by the 
              letin variable; v is no longer needed -> replaced by MLPWild *)
-          | _ -> pl, t
+          | _ -> pl, t, an
         ) pltl in
         ( build_fix_term comp (env, id_fun) binded_vars (MLTVar nvar, mt_ty),
-          (* The pattern matching is done on the letin var to avoid multiple calculi. *)
+          (* The pattern matching is done on the letin var to avoid 
+                                                            multiple calculi. *)
           [nvar, build_fix_term comp (env, id_fun) binded_vars (mt, mt_ty)],
           npltl )
-      else (build_fix_term comp (env, id_fun) binded_vars (mt, mt_ty)), [], pltl in
+      else 
+        (build_fix_term comp (env, id_fun) binded_vars (mt, mt_ty)), [], pltl in
+    let anlams = flatmap (fun (pl, _, an) -> match pl with
+      | (MLPVar _, _)::_ -> an
+      | _ -> []
+    ) pltl in
       
     let nterm = if is_constrs then
       let pats = List.map (fun cstr -> (* one pattern for each constr *)
@@ -241,37 +253,49 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
         (* pat_vars will be used as arguments in the pattern. *)
         let pat_vars = make_cstr_pat_vars cstr_arity in
         (* next_pats will be added to the patterns matrix. *)
-        let next_pats = flatmap (fun (pl, t) -> match pl with
+        let next_pats = flatmap (fun (pl, t, an) -> match pl with
           | (MLPConstr (c, args), ty)::pl_tail when c = cstr ->
             (* when an argument is a var, it is replaced by the pat_var;
                when it is a contr, it is left untouched. *)
-            [List.fold_right2 (fun (a, ty) pv (pl, t) -> match a with
-              | MLPVar v -> ((MLPWild, ty)::pl, rename_var_term v pv t)
-              | _ -> ((a, ty)::pl, t)
-            ) args pat_vars (pl_tail, t)]
-          | (MLPWild, ty)::pl_tail -> [(wild_pats@pl_tail, t)]
+            [List.fold_right2 (fun (a, ty) pv (pl, t, an) -> match a with
+              | MLPVar v -> ((MLPWild, ty)::pl, rename_var_term v pv t, an)
+              | _ -> ((a, ty)::pl, t, an)
+            ) args pat_vars (pl_tail, t, an)]
+          | (MLPWild, ty)::pl_tail -> [(wild_pats@pl_tail, t, an)]
           | _ -> []
         ) npltl in
-        let ntl = (List.map2 (fun v ty -> (MLTVar v, ty)) pat_vars args_types)@tl_tail in
+        let ntl = (List.map2 (fun v ty -> 
+          (MLTVar v, ty)) pat_vars args_types)@tl_tail in
         (* filter patterns for which we have only wildcards. *)
         let next_pats, ntl = filter_next_pats next_pats ntl in
+
+        (* filter annotations, the cstr wust be in the pattern *)
+        let ancstr = flatmap (fun (pl, _, an) -> match pl with
+          | (MLPConstr (c, _), _)::_ when c = cstr -> an
+          | _ -> []
+        ) npltl in
+
         if List.length next_pats = 0 then
           (* TODO: if full extraction => false *)
           if is_full_extraction (List.hd (extr_get_modes env id_fun)) then
-            (pat_vars, gen_default_case env (List.hd (extr_get_modes env id_fun)))
+            (pat_vars, gen_default_case env 
+              (List.hd (extr_get_modes env id_fun)), ancstr)
           else if comp then 
-            (pat_vars, gen_default_case env (List.hd (extr_get_modes env id_fun)))
+            (pat_vars, gen_default_case env 
+              (List.hd (extr_get_modes env id_fun)), ancstr)
           else raise RelExtImcompleteFunction
         else
-          (pat_vars, compile_fix_match comp (env, id_fun) binded_vars ntl next_pats)
+          (pat_vars, compile_fix_match comp 
+            (env, id_fun) binded_vars ntl next_pats, ancstr)
       ) cstr_list in
-      (FixCase (nmt, pats), (CTNone, None))
+      (FixCase (nmt, an, pats), (CTNone, None))
 
       else (* only variables: no pattern matching needed *)
         let ntl = List.tl tl in
         let _, npltl = extract_one_col npltl in
         compile_fix_match comp (env, id_fun) binded_vars ntl npltl in
-      List.fold_right (fun (i, l) t -> FixLetin (i, l, t), (CTNone, None)) lams nterm
+      List.fold_right (fun (i, l) t -> 
+        FixLetin (i, l, t, anlams), (CTNone, None)) lams nterm
 
 
 
@@ -287,8 +311,9 @@ and build_fix_term c (env, id_fun) binded_vars (t,ty) = match t with
     FixFun (i, List.map (build_fix_term c (env, id_fun) binded_vars) tl), ty
   | MLTFunNot (i, tl, _) -> 
     FixFunNot (i, List.map (build_fix_term c (env, id_fun) binded_vars) tl), ty
-  | MLTMatch (t, ptl) ->
-    let tl, pltl = normalize_pltl [t] (List.map (fun (p, t) -> [p], t) ptl) in
+  | MLTMatch (t, _, ptl) ->
+    let tl, pltl = normalize_pltl 
+      [t] (List.map (fun (p, t, an) -> [p], t, an) ptl) in
     compile_fix_match c (env, id_fun) binded_vars tl pltl
   | MLTALin _ -> anomalylabstrm "RelationExtraction" (str "Not implanted yet")
   | MLTATrue -> FixTrue, ty
@@ -330,9 +355,9 @@ let rec transform_constrs (lterm, ty) = match lterm with
   | MLTConstr (i, tl) -> MLTConstr (i, transform_constrs_list tl), ty
   | MLTFun (i, tl, m) -> MLTFun (i, transform_constrs_list tl, m), ty
   | MLTFunNot (i, tl, m) -> MLTFunNot (i, transform_constrs_list tl, m), ty
-  | MLTMatch (t, ptl) -> MLTMatch (transform_constrs t,
-    List.map (fun (p, t) -> 
-      transform_pat_constrs p, transform_constrs t) ptl), ty
+  | MLTMatch (t, an, ptl) -> MLTMatch (transform_constrs t, an,
+    List.map (fun (p, t, an) -> 
+      transform_pat_constrs p, transform_constrs t, an) ptl), ty
   | MLTATrue -> MLTConstr (ident_of_string "true", []), 
     (CTSum [ident_of_string "true";ident_of_string "false"], 
       Some (constr_of_global 
@@ -380,19 +405,19 @@ let rec complete_fun_with_option env f =
           MLTASome (lterm, ty), typ
         | _ -> assert false
       else lterm, ty
-    | MLTMatch ((MLTFun(i,args,m), (_,Some ctyp)), ptl) 
+    | MLTMatch ((MLTFun(i,args,m), (_,Some ctyp)), an, ptl) 
     when get_completion_status env i -> 
 
      let opt = constr_of_global 
        (locate (qualid_of_string "Coq.Init.Datatypes.option")) in
      let ctyp = Some (mkApp (opt, [|ctyp|])) in
      let typ = (CTSum [ident_of_string "Some";ident_of_string "None"], ctyp) in
-     MLTMatch ((MLTFun(i,args,m), typ), 
-       List.map (fun (p, t) -> match p with
-         | MLPWild, _ -> p, cfwo_rec t
-         | _ -> (MLPASome p, typ), cfwo_rec t) ptl), ty
-    | MLTMatch (lt, ptl) -> MLTMatch (lt, 
-       List.map (fun (p, t) -> p, cfwo_rec t) ptl), ty
+     MLTMatch ((MLTFun(i,args,m), typ), an,
+       List.map (fun (p, t, an) -> match p with
+         | MLPWild, _ -> p, cfwo_rec t, an
+         | _ -> (MLPASome p, typ), cfwo_rec t, an) ptl), ty
+    | MLTMatch (lt, an, ptl) -> MLTMatch (lt, an,
+       List.map (fun (p, t, an) -> p, cfwo_rec t, an) ptl), ty
     | MLTALin _ -> lterm, ty
     | MLTADefault -> lterm, ty in
   {f with mlfun_body = cfwo_rec f.mlfun_body}
@@ -424,6 +449,46 @@ let test_functions_completion env =
       { env with extr_compl = (f.mlfun_name, true)::env.extr_compl }
   ) env ids
 
+let mk_pa_var fn sn = {
+  pi_func_name = fn;
+  pi_spec_name = sn;
+}
+
+let build_proof_scheme fixfun = 
+  let rec rec_ps (ft, (ty, cty)) an = match ft with
+    | FixCase (t, anmatch, iltl) -> let cstr_list = match t with
+        | (_, (CTSum cl, _)) -> List.map string_of_ident cl
+        | _ -> anomalylabstrm "RelationExtraction" 
+                 (str "Missing type information") in
+      List.flatten (List.map2 (fun (il, next_t, anpat) cstr ->
+        let pall = rec_ps next_t anpat in
+        List.map (fun (p, al) -> if List.exists (fun a -> match p with
+            | Some pn -> a.pa_prop_name = pn
+            | None -> false ) anpat then
+          p, (CaseConstr (t, cstr, List.map 
+            (fun i -> mk_pa_var (string_of_ident i) None) il))::al
+        else p, (CaseDum (t, cstr, List.map 
+               (fun i -> mk_pa_var (string_of_ident i) None) il))::al) pall
+      ) iltl cstr_list)
+    | FixLetin (i, t, next_t, an) -> let pall = rec_ps next_t an in
+      List.map (fun (p, al) -> if List.exists (fun a -> match p with 
+          | Some pn -> a.pa_prop_name = pn 
+          | None -> false) an then
+        p, LetVar (mk_pa_var (string_of_ident i) None, t)::al
+      else p, LetDum (mk_pa_var (string_of_ident i) None, t)::al) pall
+    | _ -> begin match an with 
+      | [] -> [None, [OutputTerm None]]
+      | [{pa_prop_name = pn; pa_renamings = _}] -> 
+        [Some pn, [OutputTerm (Some (ft, (ty, cty)))]]
+      | _ -> assert false
+    end in
+  let pall = rec_ps fixfun.fixfun_body [] in
+  let branches = List.map (fun (p, al) -> let p = match p with
+      | None -> None
+      | Some p -> Some (string_of_ident p) in
+    {psb_prop_name = p; psb_branch = al}) pall in
+  { scheme_branches = branches; }
+
 (* Build all fix functions. *)
 let build_all_fixfuns env =
   let env = add_standard_constr_to_spec env in
@@ -431,6 +496,7 @@ let build_all_fixfuns env =
   let ids = List.map fst env.extr_mlfuns in
   List.fold_left (fun env id -> 
     let fixfun = gen_fix_fun env id in
-    { env with extr_fixfuns = (id, fixfun)::env.extr_fixfuns }
+    { env with extr_fixfuns = (id, 
+      (fixfun, build_proof_scheme fixfun))::env.extr_fixfuns }
   ) env ids
   

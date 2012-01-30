@@ -136,9 +136,9 @@ and gen_term (env, id_spec) default bind (t,_) = match t with
     MLapp (MLglob glb, List.map (gen_term (env, id_spec) default bind) tl)
   | MLTATrue -> get_true ()
   | MLTAFalse -> get_false ()
-  | MLTMatch (t, ptl) ->
+  | MLTMatch (t, _, ptl) ->
   let t = gen_term (env, id_spec) default bind t in
-  let pats = List.map (fun (p, t) ->
+  let pats = List.map (fun (p, t, _) ->
     let pat, nbind = gen_pat (env, id_spec) bind [] p in
     let term = gen_term (env, id_spec) default ((List.rev nbind)@bind) t in
     (List.map ml_id_of_ident nbind, pat, term)) ptl in
