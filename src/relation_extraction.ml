@@ -134,6 +134,15 @@ Printf.eprintf "%s\n" (pp_extract_env env);
 (*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
   gen_fixpoint env
 
+let relation_extraction_fixpoint_order ind_ref modes =
+  let env = extract_relation_common false true (List.map fst modes) modes in
+  let ids = List.map fst env.extr_mlfuns in
+  
+(*Printf.eprintf "%s\n" (pp_extract_env env);*)
+
+  let env = build_all_fixfuns env in
+(*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
+  gen_fixpoint env
 
 (* DEBUG: Displaying a constant idr:
 let cstr = constr_of_global (global idr) in

@@ -275,29 +275,29 @@ let rec build_premisse (env, id_spec) named_prod term =
             Some (constr_of_global 
               (locate (qualid_of_string "Coq.Init.Datatypes.bool"))))
         | _ -> unknown_type env in
-      (PMTerm ((prem_term, prem_term_type)))::pred_terms, env
+      (PMTerm ((prem_term, prem_term_type), Some (fresh_ident "Pm_" ())))::pred_terms, env
     ) modes ([], env) in
     let env = add_indgref_to_env env id ind_gref in
     begin match pred_terms with
       | [] -> anomalylabstrm "RelationExtraction" (str "Bad premisse form")
       | [pred_term] -> pred_term, env
-      | _ -> PMChoice pred_terms, env 
+      | _ -> PMChoice (pred_terms, Some (fresh_ident "Pm_" ())), env 
     end in
   begin match kind_of_term term with
     | App (h, [|arg|]) when isNot h ->
       let pm, env = build_premisse (env, id_spec) named_prod arg in
-      (PMNot pm, env)
+      (PMNot (pm, Some (fresh_ident "Pm_" ())), env)
     | App (h, args) when isOr h ->
       let pms, env = build_premisse_list (env, id_spec) 
         named_prod (Array.to_list args) in
-      (PMOr pms, env)
+      (PMOr (pms, Some (fresh_ident "Pm_" ())), env)
     | App (h, args) when isAnd h ->
       let pms, env = build_premisse_list (env, id_spec) 
         named_prod (Array.to_list args) in
-      (PMAnd pms, env)
+      (PMAnd (pms, Some (fresh_ident "Pm_" ())), env)
     | App (h, _) when isConst h -> let t, env = build_term (env, id_spec) 
         named_prod None term in
-      PMTerm t, env
+      PMTerm (t, Some (fresh_ident "Pm_" ())), env
     | App (h, args) when isInd h -> let ind = destInd h in
       build_predicate ind args
     | App (h, args) when isRel h -> let i = destRel h in
@@ -323,7 +323,7 @@ let build_prem (env, id_spec) named_prod cstr = match kind_of_term cstr with
   | App (_, args) ->
     let t, env = build_premisse (env, id_spec) named_prod cstr in
     begin match t with
-      | PMTerm (MLTFun (_, [], _),_) ->
+      | PMTerm ((MLTFun (_, [], _),_),_) ->
         ([], env) (* fix for the fake list() premisse *)
       | _ -> ([t], env)
     end

@@ -114,15 +114,10 @@ let gen_default_case env mode =
   if is_full_extraction mode then fake_type env FixFalse
   else fake_type env FixNone
 
-(* Gives a new fresh identifier for a variable. *)
-let get_fresh_var =
-  let i = ref 0 in
-  fun () -> i := !i + 1; "fix_" ^ (string_of_int !i)
-
 (* Makes a list of n fresh variables. *)
 let rec make_cstr_pat_vars n =
   if n = 0 then [] 
-  else (ident_of_string (get_fresh_var ())) :: (make_cstr_pat_vars (n-1))
+  else (ident_of_string (fresh_string_id "fix_" ())) :: (make_cstr_pat_vars (n-1))
 
 (* Makes a list of n wild patterns. *)
 let rec make_wild_pats env n =
@@ -183,7 +178,8 @@ let clear_type_from_coq typ = match kind_of_term typ with
 let rec get_cstr_arity_and_types env cstr pltl = match pltl with
   | [] -> let cstr = try List.assoc cstr env.extr_henv.cstrs with Not_found -> 
       anomalylabstrm "RelationExtraction" 
-      (str "Cannot find a constructor in the extraction environment") in
+      (str ("Cannot find the '" ^ string_of_ident cstr ^ 
+            "' constructor in the extraction environment")) in
     coq_type_explorer env cstr
   | ((MLPConstr (c, args), _)::_, _, _)::_ when c = cstr ->
     (List.length args, List.map snd args)
@@ -208,10 +204,11 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
   | [] -> begin match pltl with
     | [[], t, _] -> build_fix_term comp (env, id_fun) binded_vars t
                (* no more terms to match *)
-    | _ -> assert false
+    | ([], t, _)::_ -> 
+             (* This happens in the relaxed extraction, we keep only the first
+                output term. Most general pattens are always placed after. *)
+          build_fix_term comp (env, id_fun) binded_vars t
   end
-  | (mt, ((CTNone, _) ))::_ -> anomalylabstrm "RelationExtraction"
-                                 (str "Missing type information")
   | (mt, ((CTSum cstr_list, _) as mt_ty))::tl_tail ->
     (* match mt with the first pattern of every pl present in pltl *)
 
@@ -224,7 +221,7 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
       | _ -> assert false) pltl in
     let an = flatmap (fun (_, _, an) -> an) pltl in
     let nmt, lams, npltl = if is_variables then 
-        let nvar = ident_of_string (get_fresh_var ()) in
+        let nvar = ident_of_string (fresh_string_id "fix_" ()) in
         (* if there is at least one variable: we create a variable for 
                                                                     the letin *)
         let npltl = List.map ( fun (pl, t, an) -> match pl with
@@ -243,6 +240,14 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
         (build_fix_term comp (env, id_fun) binded_vars (mt, mt_ty)), [], pltl in
     let anlams = flatmap (fun (pl, _, an) -> match pl with
       | (MLPVar _, _)::_ -> an
+      | _ -> []
+    ) pltl in
+    let anwild = flatmap (fun (pl, _, an) -> match pl with
+      | (MLPWild _, _)::_ -> an
+      | _ -> []
+    ) pltl in
+    let ancstrs = flatmap (fun (pl, _, an) -> match pl with
+      | (MLPConstr _, _)::_ -> an
       | _ -> []
     ) pltl in
       
@@ -279,16 +284,16 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
           (* TODO: if full extraction => false *)
           if is_full_extraction (List.hd (extr_get_modes env id_fun)) then
             (pat_vars, gen_default_case env 
-              (List.hd (extr_get_modes env id_fun)), ancstr)
+              (List.hd (extr_get_modes env id_fun)), ancstr@anwild@anlams)
           else if comp then 
             (pat_vars, gen_default_case env 
-              (List.hd (extr_get_modes env id_fun)), ancstr)
+              (List.hd (extr_get_modes env id_fun)), ancstr@anwild@anlams)
           else raise RelExtImcompleteFunction
         else
           (pat_vars, compile_fix_match comp 
-            (env, id_fun) binded_vars ntl next_pats, ancstr)
+            (env, id_fun) binded_vars ntl next_pats, ancstr@anwild@anlams)
       ) cstr_list in
-      (FixCase (nmt, an, pats), (CTNone, None))
+      (FixCase (nmt, ancstrs, pats), (CTNone, None))
 
       else (* only variables: no pattern matching needed *)
         let ntl = List.tl tl in
@@ -296,6 +301,10 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
         compile_fix_match comp (env, id_fun) binded_vars ntl npltl in
       List.fold_right (fun (i, l) t -> 
         FixLetin (i, l, t, anlams), (CTNone, None)) lams nterm
+
+
+  | (mt, ((_, _) ))::_ -> anomalylabstrm "RelationExtraction"
+                                 (str "Missing type information")
 
 
 
@@ -454,6 +463,14 @@ let mk_pa_var fn sn = {
   pi_spec_name = sn;
 }
 
+let rec list_exists_assoc f l = match l with
+  | [] -> false, None
+  | e::t -> let b, r = f e in if b then true, r else list_exists_assoc f t
+
+let mk_po pm_n_opt = match pm_n_opt with
+  | None -> assert false (* TODO: error message ? *)
+  | Some pm_n -> { po_prem_name = string_of_ident pm_n }
+
 let build_proof_scheme fixfun = 
   let rec rec_ps (ft, (ty, cty)) an = match ft with
     | FixCase (t, anmatch, iltl) -> let cstr_list = match t with
@@ -462,24 +479,29 @@ let build_proof_scheme fixfun =
                  (str "Missing type information") in
       List.flatten (List.map2 (fun (il, next_t, anpat) cstr ->
         let pall = rec_ps next_t anpat in
-        List.map (fun (p, al) -> if List.exists (fun a -> match p with
-            | Some pn -> a.pa_prop_name = pn
-            | None -> false ) anpat then
+        List.map (fun (p, al) -> let b, pm_n = list_exists_assoc (fun a -> 
+          match p with
+            | Some pn -> a.pa_prop_name = pn, Some a.pa_prem_name
+            | None -> false, None) anmatch in
+        if b then
           p, (CaseConstr (t, cstr, List.map 
-            (fun i -> mk_pa_var (string_of_ident i) None) il))::al
+            (fun i -> mk_pa_var (string_of_ident i) None) il, mk_po pm_n), None)::al
         else p, (CaseDum (t, cstr, List.map 
-               (fun i -> mk_pa_var (string_of_ident i) None) il))::al) pall
+               (fun i -> mk_pa_var (string_of_ident i) None) il), None)::al) pall
       ) iltl cstr_list)
-    | FixLetin (i, t, next_t, an) -> let pall = rec_ps next_t an in
-      List.map (fun (p, al) -> if List.exists (fun a -> match p with 
-          | Some pn -> a.pa_prop_name = pn 
-          | None -> false) an then
-        p, LetVar (mk_pa_var (string_of_ident i) None, t)::al
-      else p, LetDum (mk_pa_var (string_of_ident i) None, t)::al) pall
+    | FixLetin (i, t, next_t, anlet) -> let pall = rec_ps next_t an in
+      List.map (fun (p, al) -> let b, pm_n = list_exists_assoc (fun a -> 
+        match p with
+          | Some pn -> a.pa_prop_name = pn, Some a.pa_prem_name
+          | None -> false, None) anlet in
+        if b then
+        p, (LetVar (mk_pa_var (string_of_ident i) None, t, mk_po pm_n), None)::al
+      else p, (LetDum (mk_pa_var (string_of_ident i) None, t), None)::al) pall
     | _ -> begin match an with 
-      | [] -> [None, [OutputTerm None]]
-      | [{pa_prop_name = pn; pa_renamings = _}] -> 
-        [Some pn, [OutputTerm (Some (ft, (ty, cty)))]]
+      | [] -> [None, [OutputTerm None, None]]
+      | ({pa_prop_name = pn; pa_renamings = _})::_ -> 
+        (* a list with more than one element can occur in relaxed extraction *)
+        [Some pn, [OutputTerm (Some (ft, (ty, cty))), None]]
       | _ -> assert false
     end in
   let pall = rec_ps fixfun.fixfun_body [] in

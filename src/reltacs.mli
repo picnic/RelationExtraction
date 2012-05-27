@@ -24,10 +24,13 @@ open Proof_scheme
 open Coq_stuff
 open Pred
 
-(* Makes the tactical proof of correction of a function in very basic cases.
-   The function must be complete and extracted in partial maode. *)
-val do_simpl_proof : htyp fix_term proof_scheme -> string -> string list -> 
-  string -> unit
+(* Type of an automatic prover for extracted functions. *)
+type scheme_prover
 
+(* Proves a lemma with a given scheme prover. *)
+val make_proof : ((htyp, henv) extract_env * ident) -> scheme_prover -> 
+                 (htyp fix_term) proof_scheme -> unit
 
+(* Very basic correction prover. *)
+val simple_pc : scheme_prover
 

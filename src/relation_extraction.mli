@@ -39,3 +39,6 @@ val relation_extraction_order : Libnames.reference ->
 (* Extraction of one or more relations into Fixpoints. *)
 val relation_extraction_fixpoint : Libnames.reference ->
   (Libnames.reference * int list) list -> unit
+
+val relation_extraction_fixpoint_order : Libnames.reference ->
+  (Libnames.reference * int list) list -> unit

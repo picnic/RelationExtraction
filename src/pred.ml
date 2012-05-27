@@ -44,6 +44,10 @@ let flatmap f l = List.flatten ((List.map f) l)
 type ident = string
 let string_of_ident i = i
 let ident_of_string i = i
+let fresh_string_id =
+  let i = ref 0 in
+  fun base_name () -> i := !i + 1; base_name ^ (string_of_int !i)
+let fresh_ident base_name () = ident_of_string (fresh_string_id base_name ())
 
 
 (*************************)
@@ -52,19 +56,26 @@ let ident_of_string i = i
 
 type annot_atom = {
   pa_prop_name : ident;
+  pa_prem_name : ident;
   pa_renamings : (ident * ident) list;
 }
 
 type pannot = annot_atom list
 
 let pp_pannot an = "{" ^ concat_list 
-  (List.map (fun a -> string_of_ident a.pa_prop_name) an) "&" ^ "}"
+  (List.map (fun a -> string_of_ident a.pa_prop_name ^ "(" ^ 
+   string_of_ident a.pa_prem_name ^ ")") an) "&" ^ "}"
 
-let mk_an prop_name = match prop_name with
-  | Some i -> [{ pa_prop_name = i; pa_renamings = []; }]
-  | None -> [{ pa_prop_name = ""; pa_renamings = []; }]
+let option_name_to_ident opt_name = match opt_name with
+  | None -> ident_of_string ""
+  | Some id -> id
 
-let an_add_prop an prop_name = (mk_an prop_name)@an
+let mk_an prop_name prem_name = 
+  [{ pa_prop_name = option_name_to_ident prop_name; 
+     pa_prem_name = option_name_to_ident prem_name; 
+     pa_renamings = [] }]
+
+let an_add_prop an prop_name prem_name = (mk_an prop_name prem_name)@an
 
 (* TODO: add variables renamings in annotations *)
 
@@ -204,12 +215,11 @@ let pp_ml_term t = pp_ml_term_aux "" t
 (******************)
 
 type 'htyp premisse =
-  | PMTerm of 'htyp ml_term 
-    (* maybe_todo: identify every pmt with an int id *)
-  | PMNot of 'htyp premisse
-  | PMOr of 'htyp premisse list
-  | PMAnd of 'htyp premisse list
-  | PMChoice of 'htyp premisse list
+  | PMTerm of 'htyp ml_term * ident option
+  | PMNot of 'htyp premisse * ident option
+  | PMOr of 'htyp premisse list * ident option
+  | PMAnd of 'htyp premisse list * ident option
+  | PMChoice of 'htyp premisse list * ident option
 
 type 'htyp property = {
   prop_name : ident option;
@@ -225,11 +235,11 @@ type 'htyp spec = {
 } 
 
 let rec pp_premisse prem = match prem with
-  | PMTerm t -> pp_ml_term t
-  | PMNot pm -> "not " ^ pp_premisse pm
-  | PMOr pml -> "(" ^ concat_list (List.map pp_premisse pml) " || " ^ ")"
-  | PMAnd pml -> "(" ^ concat_list (List.map pp_premisse pml) " && " ^ ")"
-  | PMChoice pml -> "(" ^ concat_list (List.map pp_premisse pml) " | " ^ ")"
+  | PMTerm (t, _) -> pp_ml_term t
+  | PMNot (pm, _) -> "not " ^ pp_premisse pm
+  | PMOr (pml, _) -> "(" ^ concat_list (List.map pp_premisse pml) " || " ^ ")"
+  | PMAnd (pml, _) -> "(" ^ concat_list (List.map pp_premisse pml) " && " ^ ")"
+  | PMChoice (pml, _) -> "(" ^ concat_list (List.map pp_premisse pml) " | " ^ ")"
 
 let pp_property prop = begin match prop.prop_name with
     | None -> ""
@@ -509,11 +519,11 @@ let rename_nt mapping nt = match nt with
 (* Apply variables subsitution defined by mapping to the property *)
 let rename_prop mapping prop = 
   let rec rename_prem prem = match prem with
-    | PMTerm t -> PMTerm (rename_term mapping t)
-    | PMNot pm -> PMNot (rename_prem pm)
-    | PMAnd pml -> PMAnd (List.map rename_prem pml)
-    | PMOr pml -> PMOr (List.map rename_prem pml)
-    | PMChoice pml -> PMChoice (List.map rename_prem pml)
+    | PMTerm (t, pn) -> PMTerm (rename_term mapping t, pn)
+    | PMNot (pm, pn) -> PMNot (rename_prem pm, pn)
+    | PMAnd (pml, pn) -> PMAnd (List.map rename_prem pml, pn)
+    | PMOr (pml, pn) -> PMOr (List.map rename_prem pml, pn)
+    | PMChoice (pml, pn) -> PMChoice (List.map rename_prem pml, pn)
   in
   { prop_name = prop.prop_name;
     prop_vars = prop.prop_vars;
@@ -650,46 +660,47 @@ let rename_inputs_if_needed env nt tnl prop = match tnl with
   | tn::_ -> rename_inputs_if_possible env nt tn prop
 
 let rec remove_pm_not not_flag prem = match prem with
-  | PMNot pm -> remove_pm_not (not not_flag) pm
-  | PMTerm (MLTFun (f, a, m), t) -> 
-    if not_flag then PMTerm (MLTFunNot (f, a, m), t)
+  | PMNot (pm, _) -> remove_pm_not (not not_flag) pm
+  | PMTerm ((MLTFun (f, a, m), t), pn) -> 
+    if not_flag then PMTerm ((MLTFunNot (f, a, m), t), pn)
     else prem
-  | PMAnd pms -> let pms' = List.map (remove_pm_not not_flag) pms in
-    if not_flag then PMOr pms' else PMAnd pms'
-  | PMOr pms -> let pms' = List.map (remove_pm_not not_flag) pms in
-    if not_flag then PMAnd pms' else PMOr pms'
-  | PMChoice pms -> PMChoice (List.map (remove_pm_not not_flag) pms)
+  | PMAnd (pms, pn) -> let pms' = List.map (remove_pm_not not_flag) pms in
+    if not_flag then PMOr (pms', pn) else PMAnd (pms', pn)
+  | PMOr (pms, pn) -> let pms' = List.map (remove_pm_not not_flag) pms in
+    if not_flag then PMAnd (pms', pn) else PMOr (pms', pn)
+  | PMChoice (pms, pn) -> PMChoice (List.map (remove_pm_not not_flag) pms, pn)
   | _ -> assert false
 
 (* Put one premisse in conjunctive normal form *)
 let rec develop_and and_prems = match and_prems with
-  | [PMAnd prems] -> prems
-  | (PMAnd (prems))::tl_and_prems ->
+  | [PMAnd (prems, _)] -> prems
+  | (PMAnd (prems, _))::tl_and_prems ->
     let dev_prems = develop_and tl_and_prems in
-    flatmap (fun p -> match p with PMOr top_prems ->
+    flatmap (fun p -> match p with PMOr (top_prems, _) ->
       List.map
-       (fun dp -> match dp with PMOr dtop_prems -> PMOr (top_prems@dtop_prems)
+       (fun dp -> match dp with 
+         | PMOr (dtop_prems, _) -> PMOr (top_prems@dtop_prems, None)
          | _ -> assert false)
        dev_prems
       | _ -> assert false) prems
   | _ -> assert false
 let normalize_and_or prem = let rec norm_rec prem = match prem with
-  | PMTerm _ -> PMAnd [PMOr [prem]]
-  | PMChoice _ -> PMAnd [PMOr [prem]]
-  | PMAnd prems -> PMAnd (flatmap
-    (fun p -> match norm_rec p with PMAnd ors -> ors | _ -> assert false)
-    prems)
-  | PMOr prems -> let nprems = List.map norm_rec prems in
-    PMAnd (develop_and nprems) 
+  | PMTerm _ -> PMAnd ([PMOr ([prem], None)], None)
+  | PMChoice _ -> PMAnd ([PMOr ([prem], None)], None)
+  | PMAnd (prems, pm_n) -> PMAnd (flatmap
+    (fun p -> match norm_rec p with PMAnd (ors, _) -> ors | _ -> assert false)
+    prems, pm_n)
+  | PMOr (prems, _) -> let nprems = List.map norm_rec prems in
+    PMAnd (develop_and nprems, None) 
   | PMNot _ -> 
     assert false (* remove_pm_not must be applied before normalizing *) in
   let norm_prem = norm_rec (remove_pm_not false prem) in
   let simplify_or prem = match prem with
-    | PMOr [p] -> p
+    | PMOr ([p], _) -> p
     | _ -> prem in
   match norm_prem with
-    | PMAnd [or_prem] -> simplify_or or_prem
-    | PMAnd or_prems -> PMAnd (List.map simplify_or or_prems)
+    | PMAnd ([or_prem], _) -> simplify_or or_prem
+    | PMAnd (or_prems, pm_n) -> PMAnd (List.map simplify_or or_prems, pm_n)
     | _ -> assert false
 
 
@@ -705,15 +716,15 @@ let check_insertable nt tnl = match tnl with
     | _ -> false
 
 (* insert the tree output (the last node) of a property *)
-let rec insert_output env id_spec kv nt prop tnl = 
+let rec insert_output env id_spec pm_n kv nt prop tnl = 
   if not (check_insertable nt tnl)
   then [] (* check logical terms compatibility *)
   else try let (nt, prop) = match tnl with (* rename inputs (matching term) *)
     | tn::_ -> rename_inputs_if_possible env nt tn prop
     | [] -> (nt, prop) in
-  let tn = TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name) in
+  let tn = TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n) in
   let rec io_rec tnl = match tnl with (* try to insert tn in the right place *)
-    | [] -> [[TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name)]]
+    | [] -> [[TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n)]]
       (* we can always insert at the end because 
                                         all the tests have been done before *)
     | ((TreeOutput (nti, _, _) | (TreeNode (nti, _, _))) as tni)::tntl ->
@@ -731,15 +742,15 @@ let rec insert_output env id_spec kv nt prop tnl =
   with Failure "impossible" -> []
 
 (* insert the last premisse of a property in a tree *)
-let rec insert_last_prem_term env id_spec kv nt prop tnl = 
-  insert_output env id_spec kv nt prop tnl
+let rec insert_last_prem_term env id_spec pm_n kv nt prop tnl = 
+  insert_output env id_spec pm_n kv nt prop tnl
 
-let rec insertion_recursor env id_spec prem_selector prop kv nt tnl = 
+let rec insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl = 
   let rec ir_rec tnl_acc = (* try to insert prop in every node or alone *)
     match tnl_acc with
       | [] -> (* no matching nt, insert alone *)
         let kv' = mca_add_vars env kv nt in
-        List.map (fun nchild -> [TreeNode (nt, nchild, mk_an prop.prop_name)])
+        List.map (fun nchild -> [TreeNode (nt, nchild, mk_an prop.prop_name pm_n)])
           (choose_prop_prem env id_spec prem_selector kv' prop [])
       | (TreeNode (nti, child, ani) as tni)::acc_tail -> 
         if nt_partial_ordering env id_spec nti nt then
@@ -753,13 +764,13 @@ let rec insertion_recursor env id_spec prem_selector prop kv nt tnl =
           (* nt can be inserted alone, before tni *)
           let kv' = mca_add_vars env kv nt in
           List.map ( fun nchild -> 
-              (TreeNode (nt, nchild, mk_an prop.prop_name))::tnl_acc )
+              (TreeNode (nt, nchild, mk_an prop.prop_name pm_n))::tnl_acc )
             (choose_prop_prem env id_spec prem_selector kv' prop [])
         else (* try to insert nt into tni *)
         ( try let rnt, rprop = rename_outputs_if_possible env nt tni prop in
           let kv' = mca_add_vars env kv rnt in
           List.map ( fun nchild -> 
-              (TreeNode (nti, nchild, an_add_prop ani prop.prop_name))::
+              (TreeNode (nti, nchild, an_add_prop ani prop.prop_name pm_n))::
                 acc_tail )
             (choose_prop_prem env id_spec prem_selector kv' rprop child)
          with Failure "impossible" -> [])
@@ -773,12 +784,12 @@ let rec insertion_recursor env id_spec prem_selector prop kv nt tnl =
   in ir_rec tnl
 
 (* insert a premisse term in the treenode list *)
-and insert_prem_term env id_spec prem_selector kv nt prop tnl =
+and insert_prem_term env id_spec prem_selector pm_n kv nt prop tnl =
   if not (check_insertable nt tnl) then []
   else 
   if mca_check env kv nt then
     try let nt, prop = rename_inputs_if_needed env nt tnl prop in
-      insertion_recursor env id_spec prem_selector prop kv nt tnl
+      insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl
     with Failure "impossible" -> []
   else []
 
@@ -787,18 +798,18 @@ and not_full_mode m args =
 
 (* Insert prem into tnl. Select insert_last_prem_term or insert_prem_term *)
 and insert_prem env id_spec prem_selector kv prem prop tnl = match prem with
-  | PMTerm (MLTFunNot (_, args, Some m), _) when not_full_mode m args -> []
-  | PMTerm pmt -> let nt = NTPrem pmt in
-    if prop.prop_prems = [] then insert_last_prem_term env id_spec kv nt prop tnl
-    else insert_prem_term env id_spec prem_selector kv nt prop tnl
-  | PMAnd pl -> flatmap (fun prem ->
+  | PMTerm ((MLTFunNot (_, args, Some m), _), _) when not_full_mode m args -> []
+  | PMTerm (pmt, pm_n) -> let nt = NTPrem pmt in
+    if prop.prop_prems = [] then insert_last_prem_term env id_spec pm_n kv nt prop tnl
+    else insert_prem_term env id_spec prem_selector pm_n kv nt prop tnl
+  | PMAnd (pl, _) -> flatmap (fun prem ->
       let other_prems = List.filter (fun a -> a <> prem) pl in
       let nprop = { prop with prop_prems = other_prems@prop.prop_prems } in
       insert_prem env id_spec prem_selector kv prem nprop tnl
     ) pl
-  | PMChoice pl -> flatmap
+  | PMChoice (pl, _) -> flatmap
     (fun prem -> insert_prem env id_spec prem_selector kv prem prop tnl) pl
-  | PMOr pl -> List.fold_left
+  | PMOr (pl, _) -> List.fold_left
     (fun trees prem -> flatmap
       (fun tnl -> insert_prem env id_spec prem_selector kv prem prop tnl) trees)
     [tnl] pl
@@ -815,9 +826,9 @@ let insert_prop_concl env id_spec prem_selector prop tnl =
   let nt = NTConcl prop.prop_concl in
   match prop.prop_prems with
     | [] -> (* insert the prop alone, as a tree output *)
-      insert_output env id_spec [] nt prop tnl
+      insert_output env id_spec None [] nt prop tnl
     | _ -> (* try to insert prop in one nt or alone *)
-      insertion_recursor env id_spec prem_selector prop [] nt tnl
+      insertion_recursor env id_spec prem_selector None prop [] nt tnl
 
 (* TODO: optimization when there is no overlapping constructor to add after the
  * current one. It may be possible to test with nt_partial_ordering...
@@ -983,7 +994,7 @@ let code_from_tree env id_tree tree =
   let args_types = select_args_types pred_args_types mode in
   let fun_ident = get_pred_name env id_tree mode in
   let pats = List.map (gen_pat env id_tree) tree in
-  let an = flatmap (fun p -> mk_an p.prop_name) spec.spec_props in
+  let an = flatmap (fun p -> mk_an p.prop_name None) spec.spec_props in
   {
     mlfun_name = fun_ident;
     mlfun_args = args;

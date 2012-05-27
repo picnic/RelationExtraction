@@ -31,11 +31,18 @@ type pident = {
   pi_spec_name : string option;
 }
 
+(* Information used to link atoms with the specification premisses. *)
+type prem_orig = {
+  po_prem_name : string;
+  (* We can add more information here if needed.
+     ex: precise places of each construction in the original specification *)
+}
+
 (* An atomic proof tip. 't is the type of a term. *)
 type 't ps_atom =
-  | LetVar of (pident * 't)
+  | LetVar of (pident * 't * prem_orig)
     (* let pident := 't in *)
-  | CaseConstr of ('t * string * pident list)
+  | CaseConstr of ('t * string * pident list * prem_orig)
     (* match 't with | string (pident list) => *)
   | LetDum of (pident * 't)
     (* pident.pi_spec_name must be None *)
@@ -46,7 +53,8 @@ type 't ps_atom =
 (* A execution path of the function. *)
 type 't ps_branch = {
   psb_prop_name : string option;
-  psb_branch : 't ps_atom list;
+  psb_branch : ('t ps_atom * string option) list;
+                           (* a name used in proof generation *)
 }
 
 (* Proof scheme: representation of a fix function that look like the functional 

@@ -187,20 +187,10 @@ let gen_fixpoint_bis env =
   let cstr = match cst_body.Declarations.const_body with 
   | Def cs -> Declarations.force cs in
 
-  (* proof generation in simple cases *)
-  (* By now, only very basic cases are supported. We try to build the proof only
-     in those cases. *)
-(* Proof generation temporary desactivated... *)
-(*  let _ = List.iter (fun (id, _) -> 
-    let mode = List.hd (extr_get_modes env id) in
-    let (fixfun, _) = extr_get_fixfun env id in
-    let compl = get_completion_status env fixfun.fixfun_name in
-    let full = is_full_extraction mode in
-    if (not compl) && (not full) then
-      gen_proof_compl_simple env id 
-    else ()
-  ) env.extr_extractions in
-*)  ()
+  (* Proofs generation *)
+  let _ = List.iter (fun (id, _) -> gen_correction_proof env id) 
+    env.extr_fixfuns in
+  ()
 
 (* Generates and registers Coq Fixpoints. *)
 let gen_fixpoint env = 

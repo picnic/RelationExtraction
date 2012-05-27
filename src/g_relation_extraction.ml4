@@ -75,6 +75,13 @@ VERNAC COMMAND EXTEND ExtractionRelationFixpoint
   [ relation_extraction_fixpoint (fst mde) (mde :: modes) ]
 END
 
+VERNAC COMMAND EXTEND ExtractionRelationFixpointRelaxed
+| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) ] ->
+  [ relation_extraction_fixpoint_order (fst mde) [ mde ] ]
+| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) "with" mode_list(modes) ] ->
+  [ relation_extraction_fixpoint_order (fst mde) (mde :: modes) ]
+END
+
 VERNAC COMMAND EXTEND ExtractionRelationPrint
 | [ "Extraction" "Relation" "Print" string(str) ] ->
   [ extraction_print str ]

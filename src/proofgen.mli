@@ -28,8 +28,6 @@ open Coq_stuff
 (* Proof generation *)
 (********************)
 
-(* Generates the lemma and the associated proof in very basic cases. 
-   The function must be complete and extracted in partial maode. *)
-val gen_proof_compl_simple : (htyp, henv) extract_env -> ident -> unit
-
+(* Try to generate the correction lemma and the associated tactical proof. *)
+val gen_correction_proof : (htyp, henv) extract_env -> ident -> unit
 

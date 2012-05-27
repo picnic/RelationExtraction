@@ -34,6 +34,8 @@ exception RelationExtractionError of string
 type ident
 val string_of_ident : ident -> string
 val ident_of_string : string -> ident
+val fresh_ident : string -> unit -> ident
+val fresh_string_id : string -> unit -> string
 
 
 (*************************)
@@ -42,6 +44,7 @@ val ident_of_string : string -> ident
 
 type annot_atom = {
   pa_prop_name : ident;
+  pa_prem_name : ident;
   pa_renamings : (ident * ident) list; (* new & old variable name *)
 }
 
@@ -127,11 +130,12 @@ val pp_ml_pat : 'htyp ml_pat -> string
 
 (* A premisse in a property (or constructor) of a specification. *)
 type 'htyp premisse =
-  | PMTerm of 'htyp ml_term
-  | PMNot of 'htyp premisse
-  | PMOr of 'htyp premisse list
-  | PMAnd of 'htyp premisse list
-  | PMChoice of 'htyp premisse list
+  | PMTerm of 'htyp ml_term * ident option
+  | PMNot of 'htyp premisse * ident option
+  | PMOr of 'htyp premisse list * ident option
+  | PMAnd of 'htyp premisse list * ident option
+  | PMChoice of 'htyp premisse list * ident option
+(* The ident is used to tag premisses and follow them. *)
 
 (* A property (or constructor) of a specification. *)
 type 'htyp property = {
@@ -149,6 +153,11 @@ type 'htyp spec = {
 } 
 
 val pp_spec : 'htyp spec -> string
+
+(* Finds a premisse or a term from the premisse id (may raise Not_found if the
+   premisse does not exists or if it is not a term). *)
+(* TODO?: val find_premisse_by_name : 'htyp spec -> ident -> 'htyp premisse
+val find_prem_term_by_name : 'htyp spec -> ident -> 'htyp ml_term *)
 
 
 (****************)
@@ -193,6 +202,10 @@ type 'htyp fix_untyped_term =
   | FixCase of 'htyp fix_term * pannot * 
                (ident list * 'htyp fix_term * pannot) list
   | FixLetin of ident * 'htyp fix_term * 'htyp fix_term * pannot
+(* In letin, pannot contains props concerned by the letin,
+   in match it contains props concerned by the pattern matching,
+   in patterns, it contains the list of active props (props that can still
+   appear in the output. *)
 
 (* To be converted as standard constructions. *)
   | FixSome of 'htyp fix_term
