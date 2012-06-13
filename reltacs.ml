@@ -35,6 +35,7 @@ open Proof_scheme
 open Coq_stuff
 
 let debug_print_goals = false
+let debug_print_tacs = false
 
 (****************)
 (* Proofs stuff *)
@@ -233,23 +234,59 @@ let constr_of_constr_loc cstr_loc = match cstr_loc with
       get_hyp_by_name hn (get_hyps ()) in
     hyp_finder h_cstr_opt h_cstr
 
+
+(* Prints a Coq constr. - very usefull function *)
+let pp_coq_constr c = Pp.string_of_ppcmds (Termops.print_constr c)
+
 (* Makes real Coq tactics and applies them. *)
 let rec build_tac_atom ta = match ta with
-  | INTRO str -> Tactics.intro_using (id_of_string str)
-  | INTROS strl -> Tactics.intros_using (List.map id_of_string strl)
-  | INTROSUNTIL i -> Tactics.intros_until_n_wored i
-  | REVERT (strl) -> Tactics.revert (List.map id_of_string strl)
-  | SYMMETRY str -> Tactics.symmetry_in (id_of_string str)
-  | SUBST str -> Equality.subst [id_of_string str]
-  | APPLY str -> let cstr = find_coq_constr_s str in Tactics.apply cstr
+  | INTRO str -> 
+    if debug_print_tacs then Printf.eprintf "intro %s.\n" str
+    else ();
+    Tactics.intro_using (id_of_string str)
+  | INTROS strl -> 
+    if debug_print_tacs then Printf.eprintf "intros %s.\n" (concat_list strl " ")
+    else ();
+    Tactics.intros_using (List.map id_of_string strl)
+  | INTROSUNTIL i -> 
+    if debug_print_tacs then Printf.eprintf "intros until %d.\n" i
+    else ();
+    Tactics.intros_until_n_wored i
+  | REVERT (strl) -> 
+    if debug_print_tacs && List.length strl > 0 then 
+      Printf.eprintf "revert %s.\n" (concat_list strl " ")
+    else ();
+    Tactics.revert (List.map id_of_string strl)
+  | SYMMETRY str -> 
+    if debug_print_tacs then Printf.eprintf "symmetry in %s.\n" str
+    else ();
+    Tactics.symmetry_in (id_of_string str)
+  | SUBST str -> 
+    if debug_print_tacs then Printf.eprintf "subst %s.\n" str
+    else ();
+    Equality.subst [id_of_string str]
+  | APPLY str -> let cstr = find_coq_constr_s str in 
+    if debug_print_tacs then Printf.eprintf "apply %s.\n" str
+    else ();
+    Tactics.apply cstr
   | APPLYIN (str, h) -> let cstr = find_coq_constr_s str in 
+    if debug_print_tacs then Printf.eprintf "apply %s in %s.\n" str h
+    else ();
     Tactics.simple_apply_in (id_of_string h) cstr
-  | EAPPLY str -> let cstr = find_coq_constr_s str in Tactics.eapply cstr
-  | APPLYPROP str -> 
-    Tacticals.tclTHEN (build_tac_atom (APPLY str)) 
+  | EAPPLY str -> let cstr = find_coq_constr_s str in 
+    if debug_print_tacs then Printf.eprintf "eapply %s.\n" str
+    else ();
+    Tactics.eapply cstr
+  | APPLYPROP str -> let cstr = find_coq_constr_s str in 
+    if debug_print_tacs then Printf.eprintf "apply %s; try assumption.\n" str
+    else ();
+    Tacticals.tclTHEN (Tactics.apply cstr) 
       (Tacticals.tclTRY Tactics.assumption)
-  | APPLYPROPIN (str, h) -> 
-    Tacticals.tclTHEN (build_tac_atom (APPLYIN (str, h))) 
+  | APPLYPROPIN (str, h) -> let cstr = find_coq_constr_s str in
+    if debug_print_tacs then 
+      Printf.eprintf "apply %s in %s; try assumption.\n" str h
+    else ();
+    Tacticals.tclTHEN (Tactics.simple_apply_in (id_of_string h) cstr) 
       (Tacticals.tclTRY Tactics.assumption)
   | APPLYIND str -> let ind_scheme = str ^ "_ind" in
     build_tac_atom (APPLY ind_scheme)
@@ -258,10 +295,18 @@ let rec build_tac_atom ta = match ta with
     let cstr = constr_of_constr_loc cloc in
     let hyps_ids = List.map (fun (id, _, _) -> id) (get_hyps ()) in
     let orig_hyp_id = id_of_string h in
+    let s = ["replace (" ^ (pp_coq_constr cstr_pat) ^ ") with (" ^
+            (pp_coq_constr cstr) ^ ")"] in
     let tac = Equality.replace cstr_pat cstr in
-    List.fold_right (fun hid tac -> if orig_hyp_id = hid then tac else
-      Tacticals.tclTHEN (Equality.replace_in hid cstr_pat cstr) tac
-    ) hyps_ids tac
+    let (s, t) = List.fold_right (fun hid (s, tac) -> 
+      if orig_hyp_id = hid then s, tac else
+        ("replace (" ^ (pp_coq_constr cstr_pat) ^ ") with (" ^
+          (pp_coq_constr cstr) ^ ") in " ^ (string_of_id hid))::s,
+        Tacticals.tclTHEN (Equality.replace_in hid cstr_pat cstr) tac
+    ) hyps_ids (s, tac) in
+    if debug_print_tacs then Printf.eprintf "%s.\n" (concat_list s "; ")
+    else ();
+    t
   | CHANGEV (h, v, cloc) -> 
     let cstr_pat = mkVar (id_of_string v) in
     build_tac_atom (CHANGEC (h, CoqConstr cstr_pat, cloc))
@@ -270,11 +315,19 @@ let rec build_tac_atom ta = match ta with
     let eq = find_coq_constr_s "eq" in
     let var = mkVar (id_of_string v) in
     let assert_cstr = mkApp (eq, [|t; var; cstr|]) in
+    if debug_print_tacs then 
+      Printf.eprintf "assert (%s : %s).\n" h (pp_coq_constr assert_cstr)
+    else ();
     Tactics.assert_tac (Name (id_of_string h)) assert_cstr
-  | AUTO -> Auto.default_auto
+  | AUTO -> 
+    if debug_print_tacs then Printf.eprintf "auto.\n"
+    else ();
+    Auto.default_auto
 
 (* Proves a goal, with a given prover. *)
 let make_proof (env, id) prover ps =
+  if debug_print_tacs then Printf.eprintf "\n\n\n"
+  else ();
   let intro = prover.prov_intro (env, id) ps in
   let concl = prover.prov_concl (env, id) ps in
   let prover = prover.prov_branch in
@@ -523,7 +576,9 @@ let simple_pc_branch (env, id) branch goal =
     let hn, p_h = try List.assoc nb_h hname_index, p_h
         with Not_found -> try let i, n = 
             goal_iterator true false false find_fa_name goal nb_h in
-          if i = nb_h then n, p_h
+(*old*)(*          if i = nb_h then n, p_h*)
+(* modified for proof printing. TODO: find a solution to keep real names? *)
+(*new*)          if i = nb_h then fresh_string_id "na_" (), p_h
           else raise Not_found
         with Not_found -> let n = fresh_string_id "HREC_" () in n, n::p_h in
     (mk_hnames (hn::hnames) p_h (nb_h-1)) in mk_hnames [] [] nb_h in
