@@ -20,6 +20,7 @@
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
 (****************************************************************************)
 
+open Pred
 
 (* Print a string to the extraction file. *)
 val extraction_print : string -> unit
@@ -38,7 +39,7 @@ val relation_extraction_order : Libnames.reference ->
 
 (* Extraction of one or more relations into Fixpoints. *)
 val relation_extraction_fixpoint : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
+  (Libnames.reference * int list) list -> recursion_style option -> unit
 
 val relation_extraction_fixpoint_order : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
+  (Libnames.reference * int list) list -> recursion_style option -> unit

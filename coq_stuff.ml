@@ -137,6 +137,11 @@ let make_mode ind_glb user_mode =
       else MOutput::(rec_mode tl_args (i+1)) in
   rec_mode args 1
 
+let pp_coq_constr c = Pp.string_of_ppcmds (Termops.print_constr c)
+
+let get_coq_type (_,t) = match t with
+  | Some ct -> ct
+  | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
 
 let get_in_types (env, id) =
   let rec get_in_rec args mode = match (args, mode) with
@@ -146,11 +151,20 @@ let get_in_types (env, id) =
     | _ -> [] in
   let mode = List.hd (extr_get_modes env id) in
   let args_types = (extr_get_spec env id).spec_args_types in
+  let mode, args_types = match fix_get_recursion_style env id with
+    | FixCount ->
+      (* When a function is extracted with a counter, we have to add
+         an argument (at first position) of type nat. *)
+      let coq_nat = Some (constr_of_global 
+          (locate (qualid_of_string "Coq.Init.Datatypes.nat"))) in
+      let nat_typ = CTSum [ident_of_string "O"; ident_of_string "S"], coq_nat in
+      MInput::mode, nat_typ::args_types
+    | _ -> mode, args_types in
   get_in_rec args_types mode
 
 let get_out_type opt (env, id) =
   let fun_name = (extr_get_mlfun env id).mlfun_name in 
-  let comp = get_completion_status env fun_name in
+  let comp = fix_get_completion_status env fun_name in
   let rec get_out_rec args mode = match (args, mode) with
     | (a::tl_args, MOutput::tl_mode) -> a::(get_out_rec tl_args tl_mode)
     | (_::tl_args, MInput::tl_mode) -> get_out_rec tl_args tl_mode
@@ -168,13 +182,10 @@ let get_out_type opt (env, id) =
       else t
     | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
 
-let get_coq_type (_,t) = match t with
-  | Some ct -> ct
-  | _ -> anomalylabstrm "RelationExtraction" (str "Missing type information")
-
 let find_coq_constr_s s = 
   constr_of_global (locate (qualid_of_string s))
 
 let find_coq_constr_i i = 
   find_coq_constr_s (string_of_ident i)
+
 

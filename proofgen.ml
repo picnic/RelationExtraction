@@ -56,7 +56,7 @@ let build_correct_lemma env id fixfun =
   let func = find_coq_constr_i fixfun.fixfun_name in
   let mode = List.hd (extr_get_modes env id) in
   let full = is_full_extraction mode in
-  let compl = get_completion_status env fixfun.fixfun_name in
+  let compl = fix_get_completion_status env fixfun.fixfun_name in
   let tru = find_coq_constr_s "Coq.Init.Datatypes.true" in
   let some = find_coq_constr_s "Coq.Init.Datatypes.Some" in
   
@@ -88,7 +88,7 @@ let build_correct_lemma env id fixfun =
 let gen_correction_proof env id =
   let (fixfun, ps) = extr_get_fixfun env id in
   let mode = List.hd (extr_get_modes env id) in
-  let compl = get_completion_status env fixfun.fixfun_name in
+  let compl = fix_get_completion_status env fixfun.fixfun_name in
   let full = is_full_extraction mode in
 
   (* functional scheme *)

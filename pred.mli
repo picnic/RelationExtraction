@@ -228,6 +228,11 @@ val pp_fix_fun : 'htyp fix_fun -> string
 (* Extraction *)
 (**************)
 
+(* Kind of recursion for extracted functions *)
+type recursion_style =
+  | StructRec of int (* Argument number, starting from 1 *)
+  | FixCount
+
 (* Extraction environment 
    This environment is used for one extraction command.
    One function or several mutualy recursive functions can be extracted.
@@ -240,8 +245,11 @@ type ('htyp, 'henv) extract_env = {
   (* List of predicates that will be extracted. A mode must be given for them 
      in extr_modes. The optional ident is the extracted function name. 
      The boolean flag must be true for relaxed extraction (with
-     pattern ordering in pattern matchings. *)
-  extr_extractions : (ident * (ident option * bool)) list;
+     pattern ordering in pattern matchings. Recursion style can be set when
+     extracting to Coq. If it is not defined, it is supposed to be 
+     StructRec 1. *)
+  extr_extractions : (ident * (ident option * bool * recursion_style option)) 
+                                                                           list;
   (* List of specification of the extracted predicates. *)
   extr_specs : (ident * 'htyp spec) list;
   (* List of predicate trees built from the specification. *)
@@ -254,8 +262,13 @@ type ('htyp, 'henv) extract_env = {
   extr_henv : 'henv host_env;
   (* Functions for the host language stuff. *)
   extr_hf : ('htyp, 'henv) host_functions;
-  (* Does extracted functions need to be completed for fixpoint extraction. *)
-  extr_compl : (ident * bool) list;
+  (* Info for fixpoints generation. Ids are the spec id & the fun name. *)
+  (* bool : has the function been completed with option type? This can be 
+            because the function is incomplete or the recursion kind is
+            set to FixCount.
+     recursion_style : final recursion kind of the function 
+                       (may differ from the one from extr_extractions. *)
+  extr_fix_env : ((ident * ident) * (bool * recursion_style)) list;
 }
 
 val extr_get_modes : ('t, 'h) extract_env -> ident -> mode list
@@ -266,8 +279,21 @@ val extr_get_mlfun : ('t, 'h) extract_env -> ident -> 't ml_fun
 val extr_get_fixfun : ('t, 'h) extract_env -> ident -> 
                       ('t fix_fun * ('t fix_term) proof_scheme)
 
+(* Gets the recursion style of a function that was specified by the user. *)
+val get_user_recursion_style : ('t, 'h) extract_env -> ident -> recursion_style option
+
 (* Gets the completion status of a function (for the fixpred library). *)
-val get_completion_status : ('t, 'h) extract_env -> ident -> bool
+val fix_get_completion_status : ('t, 'h) extract_env -> ident -> bool
+(* Gets the recursion style of a function (for the fixpred library). *)
+val fix_get_recursion_style : ('t, 'h) extract_env -> ident -> recursion_style
+(* Sets the completion status of a function (for the fixpred library). *)
+val fix_set_completion_status : ('t, 'h) extract_env -> ident -> bool -> ('t, 'h) extract_env
+(* Sets the recursion style of a function (for the fixpred library). *)
+val fix_set_recursion_style : ('t, 'h) extract_env -> ident -> recursion_style -> ('t, 'h) extract_env
+
+
+(* Tests if the recursion style of a function is FixCount. *)
+val is_rec_style_count : ('t, 'h) extract_env -> ident -> bool
 
 val pp_extract_env : ('t, 'h) extract_env -> string
 

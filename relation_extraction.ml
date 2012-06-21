@@ -45,9 +45,11 @@ open Proof_scheme
 (* Predicate extraction *)
 (************************)
 
+(* TODO: order specifications (by dependency) befrore doing a fixpoint 
+         extratction. *)
 
 (* Main routine *)
-let extract_relation_common dep ord ind_ref modes =
+let extract_relation_common dep ord ind_ref modes rec_style =
   (* Initial henv *)
   let ind_refs, ind_grefs = List.split (List.map ( fun (ind_ref, _) ->
     let ind = destInd (constr_of_global (global ind_ref)) in
@@ -66,7 +68,7 @@ let extract_relation_common dep ord ind_ref modes =
           ie no mode given, or fail ? *)
     ident_of_string (string_of_id oib.mind_typename)
   ) ind_ref in
-  let extractions = List.map (fun id -> id, (None, ord)) ids in
+  let extractions = List.map (fun id -> id, (None, ord, rec_style)) ids in
 
   (* Modes *)
   let modes = List.map ( fun (ind_ref, mode) ->
@@ -90,7 +92,7 @@ let extract_relation_common dep ord ind_ref modes =
     extr_fixfuns = [];
     extr_henv = henv;
     extr_hf = coq_functions;
-    extr_compl = [];
+    extr_fix_env = [];
   } in
   let env = Host2spec.find_specifications empty_env in
   (*Printf.eprintf "%s\n" (pp_extract_env env);*)
@@ -105,7 +107,7 @@ let extract_relation_common dep ord ind_ref modes =
   env
 
 let extract_relation_miniml dep ord ind_ref modes =
-  let env = extract_relation_common dep ord ind_ref modes in
+  let env = extract_relation_common dep ord ind_ref modes None in
   (* Before generating the MiniML code, we first extract all the dependences *)
   let _ = if dep then extract_dependencies env.extr_henv else () in
 
@@ -124,8 +126,9 @@ let relation_extraction ind_ref modes =
 let relation_extraction_order ind_ref modes =
   extract_relation_miniml true true (List.map fst modes) modes
 
-let relation_extraction_fixpoint ind_ref modes =
-  let env = extract_relation_common false false (List.map fst modes) modes in
+let relation_extraction_fixpoint ind_ref modes rec_style =
+  let env = extract_relation_common false false (List.map fst modes) modes 
+    rec_style in
   let ids = List.map fst env.extr_mlfuns in
   
 Printf.eprintf "%s\n" (pp_extract_env env);
@@ -134,8 +137,9 @@ Printf.eprintf "%s\n" (pp_extract_env env);
 (*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
   gen_fixpoint env
 
-let relation_extraction_fixpoint_order ind_ref modes =
-  let env = extract_relation_common false true (List.map fst modes) modes in
+let relation_extraction_fixpoint_order ind_ref modes rec_style =
+  let env = extract_relation_common false true (List.map fst modes) modes 
+    rec_style in
   let ids = List.map fst env.extr_mlfuns in
   
 (*Printf.eprintf "%s\n" (pp_extract_env env);*)

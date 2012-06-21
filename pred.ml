@@ -367,16 +367,20 @@ let pp_fix_fun fixfun =
 (* Extraction *)
 (**************)
 
+type recursion_style =
+  | StructRec of int
+  | FixCount
+
 type ('htyp, 'henv) extract_env = {
   extr_modes : (ident * mode list) list;
-  extr_extractions : (ident * (ident option * bool)) list;
+  extr_extractions : (ident * (ident option * bool * recursion_style option)) list;
   extr_specs : (ident * 'htyp spec) list;
   extr_trees : (ident * 'htyp tree) list;
   extr_mlfuns : (ident * 'htyp ml_fun) list;
   extr_fixfuns : (ident * ('htyp fix_fun * ('htyp fix_term) proof_scheme)) list;
   extr_henv : 'henv host_env;
   extr_hf : ('htyp, 'henv) host_functions;
-  extr_compl : (ident * bool) list;
+  extr_fix_env : ((ident * ident) * (bool * recursion_style)) list;
 }
 
 let extr_get_modes env i =
@@ -384,14 +388,52 @@ let extr_get_modes env i =
 
 let extr_get_spec env i = List.assoc i env.extr_specs
 let extr_get_spec_ord env i = 
-  let (_, ord) =  List.assoc i env.extr_extractions in
+  let (_, ord, _) =  List.assoc i env.extr_extractions in
   ord
 let extr_get_tree env i = List.assoc i env.extr_trees
 let extr_get_mlfun env i = List.assoc i env.extr_mlfuns
 let extr_get_fixfun env i = List.assoc i env.extr_fixfuns
 
-let get_completion_status env id =
-  try List.assoc id env.extr_compl with Not_found -> false
+let rec fix_assoc fix_env id = match fix_env with
+  | [] -> raise Not_found
+  | ((i1, i2), v)::_ when i1 = id || i2 = id -> v
+  | _::tail -> fix_assoc tail id
+
+let rec fix_set fix_env id v = match fix_env with
+  | [] -> raise Not_found
+  | ((i1, i2), v')::tail when i1 = id || i2 = id -> ((i1, i2), v)::tail
+  | x::tail -> x::(fix_set tail id v)
+
+let fix_get_completion_status env id =
+  let (cs, _) = fix_assoc env.extr_fix_env id in cs
+
+let fix_get_recursion_style env id =
+  let (_, rs) = fix_assoc env.extr_fix_env id in rs
+
+let fix_set_completion_status env id cs =
+  let (_, rs) = fix_assoc env.extr_fix_env id in 
+  {env with extr_fix_env = fix_set env.extr_fix_env id (cs, rs)}
+
+let fix_set_recursion_style env id rs =
+  let (cs, _) = fix_assoc env.extr_fix_env id in 
+  {env with extr_fix_env = fix_set env.extr_fix_env id (cs, rs)}
+
+let get_spec_id_from_fname env fn = 
+  let rec find_id mlf_list = match mlf_list with
+    | [] -> raise Not_found
+    | (id, mlf)::_ when mlf.mlfun_name = fn -> id
+    | _::mlf_tail -> find_id mlf_tail in
+  find_id env.extr_mlfuns
+
+let get_user_recursion_style env id =
+  try let (_, _, rs) = List.assoc id env.extr_extractions in rs
+  with Not_found -> try let (_, _, rs) = 
+    List.assoc (get_spec_id_from_fname env id) env.extr_extractions in rs
+  with Not_found -> None
+
+let is_rec_style_count env id = match fix_get_recursion_style env id with
+  | FixCount -> true
+  | _ -> false
 
 let pp_extract_env env =
   "(********* Modes *********)\n\n" ^
@@ -869,9 +911,9 @@ let get_pred_name env id_spec m =
     (string_of_ident id_spec ^ (string_of_mode m)) in
   if not (List.mem_assoc id_spec env.extr_extractions) then
     name_from_mode m
-  else match fst (List.assoc id_spec env.extr_extractions) with
-    | Some fn -> fn
-    | None -> name_from_mode m
+  else match List.assoc id_spec env.extr_extractions with
+    | Some fn, _, _ -> fn
+    | None, _, _ -> name_from_mode m
 
 let gen_args mode =
   let rec rec_args mode i = match mode with

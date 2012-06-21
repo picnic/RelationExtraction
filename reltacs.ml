@@ -235,9 +235,6 @@ let constr_of_constr_loc cstr_loc = match cstr_loc with
     hyp_finder h_cstr_opt h_cstr
 
 
-(* Prints a Coq constr. - very usefull function *)
-let pp_coq_constr c = Pp.string_of_ppcmds (Termops.print_constr c)
-
 (* Makes real Coq tactics and applies them. *)
 let rec build_tac_atom ta = match ta with
   | INTRO str -> 
