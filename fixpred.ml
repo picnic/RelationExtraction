@@ -34,6 +34,8 @@ open Pp
 open Nametab
 open Libnames
 
+let debug_print_proofscheme = true
+
 exception RelExtNoFixTuple
 exception RelExtImcompleteFunction
 
@@ -520,7 +522,11 @@ let build_all_fixfuns env =
   let ids = List.map fst env.extr_mlfuns in
   List.fold_left (fun env id -> 
     let fixfun = gen_fix_fun env id in
+    let proofscheme = build_proof_scheme fixfun in
+    if debug_print_proofscheme then
+      Printf.eprintf "%s\n\n" (pp_proof_scheme pp_fix_term proofscheme)
+    else ();
     { env with extr_fixfuns = (id, 
-      (fixfun, build_proof_scheme fixfun))::env.extr_fixfuns }
+      (fixfun, proofscheme))::env.extr_fixfuns }
   ) env ids
   
