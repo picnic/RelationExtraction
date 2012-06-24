@@ -130,6 +130,7 @@ apply pc1.
 (*OutputTerm (Some(P(fix_34{O|S}, fix_41{O|S}){P}){Some|None})*)
 
 (**** %default% ****)
+discriminate.
 (*CaseDum (p1{O|S}, S, (fix_30))*)
 (*LetDum (fix_31, p2{O|S})*)
 (*CaseDum (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, Some, (fix_32))*)
@@ -144,6 +145,7 @@ apply pc1.
 (*OutputTerm (None)*)
 
 (**** %default% ****)
+discriminate.
 (*CaseDum (p1{O|S}, S, (fix_30)) -> LetDum (fix_31, p2{O|S})*)
 (*CaseDum (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, Some, (fix_32))*)
 (*CaseDum (fix_32{P}, P, (fix_34, fix_33))*)
@@ -155,18 +157,65 @@ apply pc1.
 (*OutputTerm (None)*)
 
 (**** pc0 ****)
+intros.
 (*CaseConstr (p1{O|S}, S, (fix_30), )*)
+replace p1 with (S fix_30).
 (*LetVar (fix_31, p2{O|S}, )*)
+assert (fix_31 = p2).
+auto.
+replace fix_31 with p2.
 (*CaseConstr (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, Some, (fix_32), Pm_7)*)
+replace (pc12 fix_30 fix_31) with (Some fix_32).
 (*CaseConstr (fix_32{P}, P, (fix_34, fix_33), Pm_7)*)
+replace fix_32 with (P fix_34 fix_33).
 (*CaseConstr (fix_33{O|S}, O, (), Pm_7)*)
+replace fix_33 with 0.
 (*CaseConstr (pc12 (fix_30{O|S}) (fix_34{O|S}){Some|None}, Some, (fix_35), Pm_8)*)
+replace (pc12 fix_30 fix_34) with (Some fix_35).
 (*CaseConstr (fix_35{P}, P, (fix_37, fix_36), Pm_8)*)
+replace fix_35 with (P fix_37 fix_36).
 (*CaseDum (fix_37{O|S}, S, (fix_42))*)
 (*LetVar (fix_43, add12 (fix_34{O|S}) (fix_37{O|S}){O|S}, Pm_9)*)
+assert (fix_43 = add12 fix_34 fix_37).
+auto.
+replace fix_43 with (add12 fix_34 fix_37).
+
+(* manual automatic renamings... Already done in the first prover *)
+(* H *)
+replace (pc12 fix_30 fix_31) with (Some fix_32) in H.
+replace fix_32 with (P fix_34 fix_33) in H.
+replace fix_33 with 0 in H.
+replace fix_31 with p2 in H.
+(* H0 *)
+replace (pc12 fix_30 fix_34) with (Some fix_35) in H0.
+replace fix_35 with (P fix_37 fix_36) in H0.
+
+(* new tactics to deal with Some *)
+(* H: pc12 fix_30 p2 = Some p_3 -> pc fix_30 p2 p_3 *)
+specialize (H (P fix_34 0)).
+assert (H' : pc fix_30 p2 (P fix_34 0)).
+auto.
+
+(* H0: Some (P (S _x) fix_36) = Some p_3 -> pc fix_30 fix_34 p_3 *)
+specialize (H0 (P fix_37 fix_36)).
+assert (H0' : pc fix_30 fix_34 (P fix_37 fix_36)).
+auto.
+
+(* for conclusion: use the last hyp (here H1) *)
+injection H1.
+intro H1'.
+replace p_3 with (P fix_43 fix_36).
+
+symmetry in H3.
+apply add12_correct in H3.
+
+revert H3 H0' H'.
+apply pc0.
+
 (*OutputTerm (Some(P(fix_43{O|S}, fix_36{O|S}){P}){Some|None})*)
 
 (**** %default% ****)
+discriminate.
 (*CaseDum (p1{O|S}, S, (fix_30))*)
 (*LetDum (fix_31, p2{O|S})*)
 (*CaseDum (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, Some, (fix_32))*)
@@ -176,6 +225,7 @@ apply pc1.
 (*OutputTerm (None)*)
 
 (**** %default% ****)
+discriminate.
 (*CaseDum (p1{O|S}, S, (fix_30))*)
 (*LetDum (fix_31, p2{O|S})*)
 (*CaseDum (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, Some, (fix_32))*)
@@ -184,8 +234,12 @@ apply pc1.
 (*OutputTerm (None)*)
 
 (**** %default% ****)
+discriminate.
 (*CaseDum (p1{O|S}, S, (fix_30))*)
 (*LetDum (fix_31, p2{O|S})*)
 (*CaseDum (pc12 (fix_30{O|S}) (fix_31{O|S}){Some|None}, None, ())*)
 (*OutputTerm (None)*)
 
+Qed.
+
+Check pc12_correct.
