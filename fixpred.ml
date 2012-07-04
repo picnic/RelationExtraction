@@ -531,7 +531,7 @@ let rec list_exists_tuple f l = match l with
     let (a', b') = list_exists_tuple f tail in
     (a || a', b || b')
 
-let propag_one_func env mlf = 
+let propag_one_func env (spec_id, mlf) = 
   let rec browse_func (mlt, _) = match mlt with
     | MLTTuple tl -> list_exists_tuple browse_func tl
     | MLTRecord (il, tl) -> list_exists_tuple browse_func tl
@@ -549,7 +549,10 @@ let propag_one_func env mlf =
   let fn = mlf.mlfun_name in
   let dep_compl, dep_count = browse_func mlf.mlfun_body in
   let compl = fix_get_completion_status env fn in
-  let env = fix_set_completion_status env fn (dep_compl || compl) in
+  let full = is_full_extraction (List.hd (extr_get_modes env spec_id)) in
+  let env = if full then
+    fix_set_completion_status env fn (dep_compl || compl) 
+  else env in
   if dep_count then
     let env = fix_set_recursion_style env fn FixCount in
     fix_set_completion_status env fn true
@@ -557,8 +560,7 @@ let propag_one_func env mlf =
 
 let build_fix_env env =
   let rec build_until_the_end env =
-    let nenv = List.fold_left propag_one_func env 
-      (List.map snd env.extr_mlfuns) in
+    let nenv = List.fold_left propag_one_func env env.extr_mlfuns in
     if nenv.extr_fix_env = env.extr_fix_env then env
     else build_until_the_end nenv in
   build_until_the_end {env with extr_fix_env = build_initial_fix_env env}
