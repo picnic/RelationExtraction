@@ -64,3 +64,8 @@ val get_coq_type : htyp term_type -> Term.types
 (* Find a Coq constr from its name (as an ident or a string) *)
 val find_coq_constr_i : ident -> Term.constr
 val find_coq_constr_s : string -> Term.constr
+
+
+(* Prints a Coq constr. *)
+val pp_coq_constr : Term.constr -> string
+

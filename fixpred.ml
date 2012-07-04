@@ -117,7 +117,8 @@ let gen_default_case env mode =
 (* Makes a list of n fresh variables. *)
 let rec make_cstr_pat_vars n =
   if n = 0 then [] 
-  else (ident_of_string (fresh_string_id "fix_" ())) :: (make_cstr_pat_vars (n-1))
+  else (ident_of_string (fresh_string_id "fix_" ())) :: 
+    (make_cstr_pat_vars (n-1))
 
 (* Makes a list of n wild patterns. *)
 let rec make_wild_pats env n =
@@ -252,7 +253,7 @@ let rec compile_fix_match comp (env, id_fun) binded_vars tl pltl = match tl with
       | (MLPConstr _, _)::_ -> an
       | _ -> []
     ) pltl in
-      
+
     let nterm = if is_constrs then
       let pats = List.map (fun cstr -> (* one pattern for each constr *)
         let cstr_arity, args_types = get_cstr_arity_and_types env cstr npltl in
@@ -405,7 +406,7 @@ let rec complete_fun_with_option env f =
   let rec cfwo_rec (lterm, ty) = match lterm with
     | MLTVar _ | MLTTuple _ | MLTRecord _ | MLTConstr _ | MLTConst _ | MLTFun _ 
     | MLTFunNot _ | MLTATrue | MLTAFalse | MLTASome _ | MLTANone -> 
-      if get_completion_status env f.mlfun_name then
+      if fix_get_completion_status env f.mlfun_name then
         let opt = constr_of_global 
           (locate (qualid_of_string "Coq.Init.Datatypes.option")) in
         match ty with
@@ -417,7 +418,7 @@ let rec complete_fun_with_option env f =
         | _ -> assert false
       else lterm, ty
     | MLTMatch ((MLTFun(i,args,m), (_,Some ctyp)), an, ptl) 
-    when get_completion_status env i -> 
+    when fix_get_completion_status env i -> 
 
      let opt = constr_of_global 
        (locate (qualid_of_string "Coq.Init.Datatypes.option")) in
@@ -433,32 +434,136 @@ let rec complete_fun_with_option env f =
     | MLTADefault -> lterm, ty in
   {f with mlfun_body = cfwo_rec f.mlfun_body}
 
+(* Generates a Coq natural number. *)
+let rec gen_coq_nat n = if n = 0 then 
+    constr_of_global (locate (qualid_of_string "Coq.Init.Datatypes.O"))
+  else
+    let s = constr_of_global 
+      (locate (qualid_of_string "Coq.Init.Datatypes.S")) in
+    mkApp (s, [|gen_coq_nat (n-1)|])
+
+(* Add a counter for FixCount recursion style in an ml function. *)
+(* The ml function must already have been completed with option type
+   prior to use this function. *)
+let add_ml_counter env f = 
+  let fname = f.mlfun_name in
+  let (mlt, typ) = f.mlfun_body in
+  let coq_nat = Some (constr_of_global 
+      (locate (qualid_of_string "Coq.Init.Datatypes.nat"))) in
+  let nat_typ = CTSum [ident_of_string "O"; ident_of_string "S"], coq_nat in
+  let fcount = MLTVar (ident_of_string "fcounter"), nat_typ in
+  let fcount_pat = MLPVar (ident_of_string "fcounter"), nat_typ in
+  let rec adapt_func_calls (mlt, typ) = match mlt with
+    | MLTTuple tl -> MLTTuple (List.map adapt_func_calls tl), typ
+    | MLTRecord (il, tl) -> MLTRecord (il, List.map adapt_func_calls tl), typ
+    | MLTConstr (i, tl) -> MLTConstr (i, List.map adapt_func_calls tl), typ
+    | MLTFun (i, tl, mo) -> begin match fix_get_recursion_style env i with
+        | FixCount -> MLTFun (i, fcount::tl, mo), typ         
+        | _ -> mlt, typ
+      end
+    | MLTFunNot (i, tl, mo) -> begin match fix_get_recursion_style env i with
+        | FixCount -> MLTFunNot (i, fcount::tl, mo), typ         
+        | _ -> mlt, typ
+      end
+    | MLTMatch (mt, an, ptal) -> let mt' = adapt_func_calls mt in
+      let ptal' = List.map (fun (p, t, a) -> (p, adapt_func_calls t, a)) ptal in
+      MLTMatch (mt', an, ptal'), typ
+    | MLTASome t -> MLTASome (adapt_func_calls t), typ
+    | _ -> mlt, typ in
+  let mlt', args' = match fix_get_recursion_style env fname with 
+    | FixCount -> let ptal = [
+        ((MLPConstr (ident_of_string "O", []), nat_typ), 
+                (MLTConstr (ident_of_string "None", []), typ), []);
+        ((MLPConstr (ident_of_string "S", [fcount_pat]), nat_typ), 
+                (adapt_func_calls (mlt, typ)), [])
+      ] in
+      (MLTMatch (fcount, [], ptal), typ), 
+        (ident_of_string "fcounter")::f.mlfun_args
+    | _ -> adapt_func_calls (mlt, typ), f.mlfun_args in
+  { mlfun_name = fname;
+    mlfun_body = mlt';
+    mlfun_args = args' }
+
+
 (* Generates a fix function from a ml function. *)
 let build_fix_fun (env, id_fun) f =
   let build_f comp f =
-    let t = transform_constrs f.mlfun_body in
+    let mlt = transform_constrs f.mlfun_body in
+    let fterm = build_fix_term comp (env, id_fun) [] mlt in
     { fixfun_name = f.mlfun_name;
       fixfun_args = f.mlfun_args;
-      fixfun_body = build_fix_term comp (env, id_fun) [] t; } in
-  build_f (get_completion_status env f.mlfun_name) 
-    (complete_fun_with_option env f)
+      fixfun_body = fterm; } in
+  let f = complete_fun_with_option env f in
+  let f = add_ml_counter env f in
+  build_f (fix_get_completion_status env f.mlfun_name) f
 
 (* Generates one fix function. *)
 let gen_fix_fun env id =
   let f = extr_get_mlfun env id in
   build_fix_fun (env, id) f
 
-(* TODO: For mutual recursive functions, the completion status
-   of a function may depend on an other one. So this function 
-   must be call until all the completion status remain the same. *)
-let test_functions_completion env =
-  let ids = List.map fst env.extr_mlfuns in
-  List.fold_left (fun env id -> 
-    try let _ = gen_fix_fun env id in env 
-    with RelExtImcompleteFunction ->
-      let f = extr_get_mlfun env id in
-      { env with extr_compl = (f.mlfun_name, true)::env.extr_compl }
-  ) env ids
+(* TODO: support for already extracted functions. *)
+(* Builds the fix env. After calling this function, we still have to check
+   for dependencies. *)
+let build_initial_fix_env env = 
+  (* Fake env to avoid the Not_found exception while generating fix funs *)
+  let fake_fix_env = List.map (fun (spec_id, _) -> 
+      (spec_id, (extr_get_mlfun env spec_id).mlfun_name),
+      (false, StructRec 0)
+    ) env.extr_mlfuns in
+  let env = {env with extr_fix_env = fake_fix_env} in
+  let spec_ids = List.map fst env.extr_mlfuns in
+  List.fold_left (fun fix_env spec_id -> 
+    let fn = (extr_get_mlfun env spec_id).mlfun_name in
+    let rs = match get_user_recursion_style env spec_id with
+      | Some rs -> rs
+      | None -> StructRec 1 in
+    let compl = match rs with
+      | FixCount -> true
+      | _ -> begin try let _ = gen_fix_fun env spec_id in false 
+             with RelExtImcompleteFunction -> true end in
+    ((spec_id, fn), (compl, rs))::fix_env
+  ) [] spec_ids
+
+let rec list_exists_tuple f l = match l with
+  | [] -> (false, false)
+  | t::tail -> let (a, b) = f t in
+    let (a', b') = list_exists_tuple f tail in
+    (a || a', b || b')
+
+let propag_one_func env (spec_id, mlf) = 
+  let rec browse_func (mlt, _) = match mlt with
+    | MLTTuple tl -> list_exists_tuple browse_func tl
+    | MLTRecord (il, tl) -> list_exists_tuple browse_func tl
+    | MLTConstr (i, tl) -> list_exists_tuple browse_func tl
+    | MLTFun (i, _, _) | MLTFunNot (i, _, _) -> 
+      let dep_compl = fix_get_completion_status env i in
+      let dep_count = match fix_get_recursion_style env i with
+        | FixCount -> true
+        | _ -> false in
+      (dep_compl, dep_count)
+    | MLTMatch (mt, _, ptal) -> 
+      let tl = mt::(List.map (fun (_, t, _) -> t) ptal) in
+      list_exists_tuple browse_func tl
+    | _ -> (false, false) in
+  let fn = mlf.mlfun_name in
+  let dep_compl, dep_count = browse_func mlf.mlfun_body in
+  let compl = fix_get_completion_status env fn in
+  let full = is_full_extraction (List.hd (extr_get_modes env spec_id)) in
+  let env = if full then
+    fix_set_completion_status env fn (dep_compl || compl) 
+  else env in
+  if dep_count then
+    let env = fix_set_recursion_style env fn FixCount in
+    fix_set_completion_status env fn true
+  else env
+
+let build_fix_env env =
+  let rec build_until_the_end env =
+    let nenv = List.fold_left propag_one_func env env.extr_mlfuns in
+    if nenv.extr_fix_env = env.extr_fix_env then env
+    else build_until_the_end nenv in
+  build_until_the_end {env with extr_fix_env = build_initial_fix_env env}
 
 let mk_pa_var fn sn = {
   pi_func_name = fn;
@@ -516,7 +621,7 @@ let build_proof_scheme fixfun =
 (* Build all fix functions. *)
 let build_all_fixfuns env =
   let env = add_standard_constr_to_spec env in
-  let env = test_functions_completion env in
+  let env = build_fix_env env in
   let ids = List.map fst env.extr_mlfuns in
   List.fold_left (fun env id -> 
     let fixfun = gen_fix_fun env id in

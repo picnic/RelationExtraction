@@ -38,6 +38,20 @@ ARGUMENT EXTEND mode
   | [ global(id) "[" integer_list(mde) "]" ] -> [ (id, mde) ]
 END
 
+let pr_rec_style rs = match rs with
+  | Some (Pred.StructRec i) -> 
+    str "" ++ spc () ++ str "Struct" ++ spc () ++ int i
+  | Some Pred.FixCount -> 
+    str "" ++ spc () ++ str "Counter"
+  | None -> str ""
+
+VERNAC ARGUMENT EXTEND rec_style
+PRINTED BY pr_rec_style
+  | [ "Struct" integer(i) ] -> [ Some (Pred.StructRec i) ]
+  | [ "Counter" ] -> [ Some Pred.FixCount ]
+  | [] -> [ None ]
+END
+
 
 VERNAC COMMAND EXTEND ExtractionRelation
 | [ "Extraction" "Relation" mode(mde) ] ->
@@ -69,21 +83,17 @@ END
 
 
 VERNAC COMMAND EXTEND ExtractionRelationFixpoint
-| [ "Extraction" "Relation" "Fixpoint" mode(mde) ] ->
-  [ relation_extraction_fixpoint (fst mde) [ mde ] ]
-| [ "Extraction" "Relation" "Fixpoint" mode(mde) "with" mode_list(modes) ] ->
-  [ relation_extraction_fixpoint (fst mde) (mde :: modes) ]
+| [ "Extraction" "Relation" "Fixpoint" mode(mde) rec_style(recs) ] ->
+  [ relation_extraction_fixpoint (fst mde) [ mde ] (recs) ]
+| [ "Extraction" "Relation" "Fixpoint" mode(mde) rec_style(recs) "with" mode_list(modes) ] ->
+  [ relation_extraction_fixpoint (fst mde) (mde :: modes) (recs) ]
 END
 
 VERNAC COMMAND EXTEND ExtractionRelationFixpointRelaxed
-| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) ] ->
-  [ relation_extraction_fixpoint_order (fst mde) [ mde ] ]
-| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) "with" mode_list(modes) ] ->
-  [ relation_extraction_fixpoint_order (fst mde) (mde :: modes) ]
+| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) rec_style(recs) ] ->
+  [ relation_extraction_fixpoint_order (fst mde) [ mde ] (recs) ]
+| [ "Extraction" "Relation" "Fixpoint" "Relaxed" mode(mde) rec_style(recs) "with" mode_list(modes) ] ->
+  [ relation_extraction_fixpoint_order (fst mde) (mde :: modes) (recs) ]
 END
 
-VERNAC COMMAND EXTEND ExtractionRelationPrint
-| [ "Extraction" "Relation" "Print" string(str) ] ->
-  [ extraction_print str ]
-END
 

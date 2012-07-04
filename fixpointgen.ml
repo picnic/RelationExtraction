@@ -176,7 +176,9 @@ let gen_fixpoint_bis env =
     let ty = gen_fix_type (env,i) (List.map string_of_ident args) in
     let recdec = 
       ([|(Name (id_of_string (string_of_ident fn)))|], [|ty|], [|c|]) in
-    let fi = ([|0|], 0), recdec in
+    let fi = match fix_get_recursion_style env i with
+      | StructRec i -> ([|i-1|], 0), recdec 
+      | _ -> ([|0|], 0), recdec in
     let f = mkFix fi in
     declare_fix Fixpoint (id_of_string (string_of_ident fn)) f ty []
   ) env.extr_fixfuns in 
