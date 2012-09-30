@@ -292,16 +292,14 @@ let rec build_tac_atom ta = match ta with
     let cstr = constr_of_constr_loc cloc in
     let hyps_ids = List.map (fun (id, _, _) -> id) (get_hyps ()) in
     let orig_hyp_id = id_of_string h in
-    let s = ["replace (" ^ (pp_coq_constr cstr_pat) ^ ") with (" ^
-            (pp_coq_constr cstr) ^ ")"] in
     let tac = Equality.replace cstr_pat cstr in
-    let (s, t) = List.fold_right (fun hid (s, tac) -> 
-      if orig_hyp_id = hid then s, tac else
-        ("replace (" ^ (pp_coq_constr cstr_pat) ^ ") with (" ^
-          (pp_coq_constr cstr) ^ ") in " ^ (string_of_id hid))::s,
+    let t = List.fold_right (fun hid tac -> 
+      if orig_hyp_id = hid then tac else
         Tacticals.tclTHEN (Equality.replace_in hid cstr_pat cstr) tac
-    ) hyps_ids (s, tac) in
-    if debug_print_tacs then Printf.eprintf "%s.\n" (concat_list s "; ")
+    ) hyps_ids tac in
+    let s = "replace (" ^ (pp_coq_constr cstr_pat) ^ ") with (" ^
+          (pp_coq_constr cstr) ^ ") in *" in
+    if debug_print_tacs then Printf.eprintf "%s.\n" s
     else ();
     t
   | CHANGEV (h, v, cloc) -> 
@@ -323,7 +321,14 @@ let rec build_tac_atom ta = match ta with
 
 (* Proves a goal, with a given prover. *)
 let make_proof (env, id) prover ps =
-  if debug_print_tacs then Printf.eprintf "\n\n\n"
+  if debug_print_tacs then
+    let (fixfun, _) = extr_get_fixfun env id in
+    let fn = string_of_ident fixfun.fixfun_name in
+    let in_s = concat_list (List.map string_of_ident fixfun.fixfun_args) " " in
+    let lem = "Lemma " ^ fn ^ "_correct_printed : forall " ^ in_s ^ " po, " ^
+              fn ^ " " ^ in_s ^ " = po -> " ^ string_of_ident id ^ " " ^ in_s ^
+              " po." in
+    Printf.eprintf "\n\n\n%s\nProof.\n" lem
   else ();
   let intro = prover.prov_intro (env, id) ps in
   let concl = prover.prov_concl (env, id) ps in
@@ -362,7 +367,11 @@ let make_proof (env, id) prover ps =
         apply_tacs prop_tac;
         apply_tacs ap_tac
   ) ps.scheme_branches;
-  apply_tacs concl
+  apply_tacs concl;
+  if debug_print_tacs then
+    Printf.eprintf "Qed.\n"
+  else ()
+  
   
 
 (****************)
