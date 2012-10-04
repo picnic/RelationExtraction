@@ -1,0 +1,19 @@
+# coq
+*.vo
+*.glob
+*.v.d
+# ocaml
+*.annot
+*.cmo
+*.cma
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+# ocamldep
+*.ml.d
+*.mli.d
+*.mllib.d
+*.ml4.d
