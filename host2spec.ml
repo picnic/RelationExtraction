@@ -244,7 +244,7 @@ let isNot constr =
     let str' = try let i = String.rindex str '#' in
       String.sub str (i+1) (String.length str - i - 1)
     with Not_found | Invalid_argument _ -> str in
-    str' = "not"
+    str' = "not" || str' = "Coq.Init.Logic.not"
   else false
 
 (* Parses a premisse of a predicate's constructor (or property). *)
