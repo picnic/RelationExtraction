@@ -128,7 +128,7 @@ and gen_term (env, id_spec) default bind (t,_) = match t with
     MLglob ref
   | MLTFun (i, tl, _) | MLTFunNot (i, tl, _) -> (* TODO: the *not* case *)
     let glb = 
-      if string_of_ident i = "eq" then
+      if string_of_ident i = "eq_full" then
         mk_dummy_glb (env, id_spec) (ident_of_string "(=)")
       else
         try global_of_constr (get_cstr (env, id_spec) i) 
