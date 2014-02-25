@@ -101,7 +101,8 @@ type 'htyp untyped_ml_term =
   | MLTConst of ident
   | MLTFun of ident * 'htyp ml_term list * mode option
   | MLTFunNot of ident * 'htyp ml_term list * mode option
-    (* The "mode option" must be None for function and Some (...) for 
+    (* MLTFun can be used to store function or inductive relations
+       The "mode option" must be None for function and Some (...) for 
        predicates. *)
 (* -- End: used by the specification -- *)
   | MLTMatch of 'htyp ml_term * pannot * 

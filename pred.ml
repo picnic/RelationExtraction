@@ -671,6 +671,11 @@ let mca_check env kv nt = match nt with
   | NTConcl _ -> true
   | NTPrem _ -> included (get_in_vars env nt) kv
 
+(* Check that output variables of premises are not known to avoid redefinition
+   of variables *)
+let mca_check_prem_output env kv nt = match nt with
+    | NTConcl _ -> true
+    | NTPrem _ -> List.for_all (fun v -> not(List.mem v kv)) (get_out_vars env nt)
 
 (* Mode coherency analysis for a predicate term *)
 (* Check that variables needed by the output are known *)
@@ -761,7 +766,9 @@ let check_insertable nt tnl = match tnl with
 let rec insert_output env id_spec pm_n kv nt prop tnl = 
   if not (check_insertable nt tnl)
   then [] (* check logical terms compatibility *)
-  else try let (nt, prop) = match tnl with (* rename inputs (matching term) *)
+  else 
+ if (mca_check env kv nt) && (mca_check_prem_output env kv nt) then
+  try let (nt, prop) = match tnl with (* rename inputs (matching term) *)
     | tn::_ -> rename_inputs_if_possible env nt tn prop
     | [] -> (nt, prop) in
   let tn = TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n) in
@@ -782,6 +789,7 @@ let rec insert_output env id_spec pm_n kv nt prop tnl =
         else []
   in io_rec tnl
   with Failure "impossible" -> []
+else []
 
 (* insert the last premisse of a property in a tree *)
 let rec insert_last_prem_term env id_spec pm_n kv nt prop tnl = 
@@ -829,7 +837,7 @@ let rec insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl =
 and insert_prem_term env id_spec prem_selector pm_n kv nt prop tnl =
   if not (check_insertable nt tnl) then []
   else 
-  if mca_check env kv nt then
+  if (mca_check env kv nt) && (mca_check_prem_output env kv nt) then
     try let nt, prop = rename_inputs_if_needed env nt tnl prop in
       insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl
     with Failure "impossible" -> []
