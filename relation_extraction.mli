@@ -14,7 +14,7 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011, 2012 CNAM-ENSIIE                                        *)
+(*  Copyright 2011, 2012, 2014 CNAM-ENSIIE                                  *)
 (*                 Catherine Dubois <dubois@ensiie.fr>                      *)
 (*                 David Delahaye <david.delahaye@cnam.fr>                  *)
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
@@ -26,20 +26,26 @@ open Pred
 val extraction_print : string -> unit
 
 (* Extraction of one relation (or mutually recursive relations). *)
-val relation_extraction_single : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
-val relation_extraction : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
+val relation_extraction_single :
+ (string option * Libnames.reference * int list * recursion_style option) list
+ -> unit
+val relation_extraction :
+(string option * Libnames.reference * int list * recursion_style option) list
+-> unit
 
 (* Extraction of one relation from a non deterministic specification. *)
-val relation_extraction_single_order : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
-val relation_extraction_order : Libnames.reference ->
-  (Libnames.reference * int list) list -> unit
+val relation_extraction_single_order :
+(string option * Libnames.reference * int list * recursion_style option) list
+-> unit
+val relation_extraction_order :
+(string option * Libnames.reference * int list * recursion_style option) list
+-> unit
 
 (* Extraction of one or more relations into Fixpoints. *)
-val relation_extraction_fixpoint : Libnames.reference ->
-  (Libnames.reference * int list) list -> recursion_style option -> unit
+val relation_extraction_fixpoint :
+(string option * Libnames.reference * int list * recursion_style option) list
+-> unit
 
-val relation_extraction_fixpoint_order : Libnames.reference ->
-  (Libnames.reference * int list) list -> recursion_style option -> unit
+val relation_extraction_fixpoint_order :
+(string option * Libnames.reference * int list * recursion_style option) list
+-> unit

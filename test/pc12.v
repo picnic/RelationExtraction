@@ -16,7 +16,7 @@ Inductive pc : nat -> nat -> nat_prod -> Prop :=
 | pc3 : forall a b c d, pc a b (P c d) -> pc (S a) b (P d c)
 | pc4 : forall a, pc O a (P O O).
 
-Extraction Relation Fixpoint Relaxed pc [1 2] with add [1 2].
+Extraction Relation Fixpoint Relaxed (pc [1 2]) (add [1 2]).
 Print pc12.
 Check pc12_correct.
 

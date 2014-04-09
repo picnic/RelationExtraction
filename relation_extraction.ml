@@ -14,7 +14,7 @@
 (*  You should have received a copy of the GNU General Public License       *)
 (*  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *)
 (*                                                                          *)
-(*  Copyright 2011, 2012 CNAM-ENSIIE                                        *)
+(*  Copyright 2011, 2012, 2014 CNAM-ENSIIE                                  *)
 (*                 Catherine Dubois <dubois@ensiie.fr>                      *)
 (*                 David Delahaye <david.delahaye@cnam.fr>                  *)
 (*                 Pierre-Nicolas Tollitte <tollitte@ensiie.fr>             *)
@@ -48,10 +48,20 @@ open Proof_scheme
 (* TODO: order specifications (by dependency) befrore doing a fixpoint 
          extratction. *)
 
+let ident_of_string_option s_opt = match s_opt with
+  | None -> None
+  | Some s -> Some (ident_of_string s)
+
+let rec find_func_name ind_ref modes = match modes with
+  | (fn, ind_ref', _, rs)::modes ->
+      if ind_ref == ind_ref' then (ident_of_string_option fn, rs)
+      else find_func_name ind_ref modes
+  | [] -> raise Not_found
+
 (* Main routine *)
-let extract_relation_common dep ord ind_ref modes rec_style =
+let extract_relation_common dep ord ind_ref modes =
   (* Initial henv *)
-  let ind_refs, ind_grefs = List.split (List.map ( fun (ind_ref, _) ->
+  let ind_refs, ind_grefs = List.split (List.map ( fun (_, ind_ref, _, _) ->
     let ind = destInd (constr_of_global (global ind_ref)) in
     let _, oib = Inductive.lookup_mind_specif (Global.env ()) ind in
     let id = ident_of_string (string_of_id oib.mind_typename) in
@@ -66,12 +76,14 @@ let extract_relation_common dep ord ind_ref modes rec_style =
              oibs in*)
   (*TODO: add irds to ind_refs if they are not present ? 
           ie no mode given, or fail ? *)
-    ident_of_string (string_of_id oib.mind_typename)
+    ident_of_string (string_of_id oib.mind_typename), ind_ref
   ) ind_ref in
-  let extractions = List.map (fun id -> id, (None, ord, rec_style)) ids in
+  let extractions = List.map (fun (id, ind_ref) ->
+    let (fn, rs) = find_func_name ind_ref modes in
+  id, (fn, ord, rs)) ids in
 
   (* Modes *)
-  let modes = List.map ( fun (ind_ref, mode) ->
+  let modes = List.map ( fun (_, ind_ref, mode, _) ->
     let ind_glb = global ind_ref in
     let ind = destInd (constr_of_global ind_glb) in
     let _, oib = Inductive.lookup_mind_specif (Global.env ()) ind in
@@ -107,48 +119,43 @@ let extract_relation_common dep ord ind_ref modes rec_style =
   env
 
 let extract_relation_miniml dep ord ind_ref modes =
-  let env = extract_relation_common dep ord ind_ref modes None in
+  let env = extract_relation_common dep ord ind_ref modes in
   (* Before generating the MiniML code, we first extract all the dependences *)
   let _ = if dep then extract_dependencies env.extr_henv else () in
 
   Minimlgen.gen_miniml env
 
 
-let relation_extraction_single ind_ref modes =
+let relation_extraction_single modes =
+  let (_, ind_ref, _, _) = List.hd modes in
   extract_relation_miniml false false [ind_ref] modes
 
-let relation_extraction_single_order ind_ref modes =
+let relation_extraction_single_order modes =
+  let (_, ind_ref, _, _) = List.hd modes in
   extract_relation_miniml false true [ind_ref] modes
 
-let relation_extraction ind_ref modes =
-  extract_relation_miniml true false (List.map fst modes) modes
+let relation_extraction modes =
+  let ind_refs = List.map (fun (_, ind_ref, _, _) -> ind_ref) modes in
+  extract_relation_miniml true false ind_refs modes
 
-let relation_extraction_order ind_ref modes =
-  extract_relation_miniml true true (List.map fst modes) modes
+let relation_extraction_order modes =
+  let ind_refs = List.map (fun (_, ind_ref, _, _) -> ind_ref) modes in
+  extract_relation_miniml true true ind_refs modes
 
-let relation_extraction_fixpoint ind_ref modes rec_style =
-  let env = extract_relation_common false false (List.map fst modes) modes 
-    rec_style in
-  let ids = List.map fst env.extr_mlfuns in
-  
-Printf.eprintf "%s\n" (pp_extract_env env);
-
+let relation_extraction_fixpoint modes =
+  let ind_refs = List.map (fun (_, ind_ref, _, _) -> ind_ref) modes in
+  let env = extract_relation_common false false ind_refs modes in
   let env = build_all_fixfuns env in
-(*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
   gen_fixpoint env
 
-let relation_extraction_fixpoint_order ind_ref modes rec_style =
-  let env = extract_relation_common false true (List.map fst modes) modes 
-    rec_style in
+let relation_extraction_fixpoint_order modes =
+  let ind_refs = List.map (fun (_, ind_ref, _, _) -> ind_ref) modes in
+  let env = extract_relation_common false true ind_refs modes in
   let ids = List.map fst env.extr_mlfuns in
-  
-(*Printf.eprintf "%s\n" (pp_extract_env env);*)
-
   let env = build_all_fixfuns env in
-(*List.iter (fun (_, (f, s)) -> Printf.eprintf "%s\n\n%s\n\n" (pp_fix_fun f) (pp_proof_scheme pp_fix_term s)) env.extr_fixfuns;*)
   gen_fixpoint env
 
-(* DEBUG: Displaying a constant idr:
+(* DEBUG HINT: Displaying a constant idr:
 let cstr = constr_of_global (global idr) in
 constr_display cstr; let cst = destConst cstr in
 let cst_body = Global.lookup_constant cst in

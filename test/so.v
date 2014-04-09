@@ -9,7 +9,7 @@ Inductive test : i -> i -> i -> Prop :=
 | c3 : test B C A
 | c1 : test A B C
 .
-Extraction Relation Relaxed test [1 2].
+Extraction Relation Relaxed (test [1 2]).
 
 
 

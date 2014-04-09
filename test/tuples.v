@@ -78,4 +78,4 @@ Extraction empty_env.
 Extraction modif_env.
 Extraction get_var.*)
 
-Extraction Relation eval [1 2].
+Extraction Relation (eval [1 2]).

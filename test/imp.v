@@ -71,7 +71,7 @@ Inductive exec : instr -> envi -> envi -> Prop :=
   | execWhileTrue : forall e i env env1 env2, eval e env VTrue -> exec i env env1 -> exec (Boucle e i) env1 env2 -> exec (Boucle e i) env env2
   | execWhileFalse : forall e i env, eval e env VFalse -> exec (Boucle e i) env env.
 
-Extraction Relation eval [1 2] with exec [1 2].
+Extraction Relation (eval [1 2]) (exec [1 2]).
 Extraction empty_env.
 
 Inductive type : Set :=
@@ -98,6 +98,6 @@ Inductive typecheck : envi -> expr -> type -> Prop :=
 Extraction option.
 Extraction type.
 Extraction get_type.
-Extraction Relation Single typecheck [1 2].
+Extraction Relation Single (typecheck [1 2]).
 
 
