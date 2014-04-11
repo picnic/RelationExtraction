@@ -286,8 +286,8 @@ type 'htyp node_type =
 
 (* Tree structure *)
 type 'htyp tree_node =
-  | TreeNode of ('htyp node_type * 'htyp tree_node list * pannot)
-  | TreeOutput of ('htyp node_type * 'htyp ml_term * pannot) 
+  | TreeNode of ('htyp node_type * 'htyp tree_node list * pannot * ident list) (*ajout de kv cath*)
+  | TreeOutput of ('htyp node_type * 'htyp ml_term * pannot * ident list) (*ajout de kv cath*) 
                                (* ml_term is a conclusion *)
 
 type 'htyp tree = 'htyp tree_node list
@@ -297,13 +297,17 @@ let pp_node_type nt = match nt with
   | NTConcl mlt -> "[" ^ pp_ml_term mlt ^ "]"
 
 let rec pp_tree_node inc tn = match tn with
-  | TreeNode (nt, tnl, _) -> inc ^ (pp_node_type nt) ^ "\n" ^
+  | TreeNode (nt, tnl, _, _) -> inc ^ (pp_node_type nt) ^ "\n" ^ (*cath*)
     (concat_list (List.map (pp_tree_node (inc^"  ")) tnl) "\n")
-  | TreeOutput (nt, mlt, _) -> inc ^ (pp_node_type nt) ^ " -> " ^
+  | TreeOutput (nt, mlt, _, _) -> inc ^ (pp_node_type nt) ^ " -> " ^ (*cath*)
     pp_ml_term mlt
 
 let pp_tree tree = concat_list (List.map (pp_tree_node "") tree) "\n"
 
+let get_kv nt = 
+  match nt with
+  TreeNode (_, _, _, kv) -> kv 
+  | _ -> failwith "no kv in TreeOutput node" 
 
 (*****************)
 (* Fix functions *)
@@ -470,6 +474,7 @@ let get_in_terms_func env mlt =
     | MLTFun (_, args, Some m), _ | MLTFunNot (_, args, Some m), _ ->
       get_rec args m
     | _ -> assert false
+
 let get_out_terms_func env mlt =
   let rec get_rec args mode = match (args, mode) with
     | (a::tl_args, MOutput::tl_mode) -> a::(get_rec tl_args tl_mode)
@@ -502,9 +507,11 @@ let rec get_variables (t, _) = match t with
 let get_in_terms env nt = match nt with
   | NTPrem mlt -> get_in_terms_func env mlt
   | NTConcl mlt -> get_out_terms_func env mlt
+
 let get_out_terms env nt = match nt with
   | NTPrem mlt -> get_out_terms_func env mlt
   | NTConcl mlt -> get_in_terms_func env mlt
+
 (* Get variables in inputs or outputs of a node_type element *)
 let get_in_vars env nt = 
   List.flatten (List.map get_variables (get_in_terms env nt))
@@ -576,12 +583,12 @@ let rename_prop mapping prop =
 (* raises Failure "impossible" if it fails *)
 (* after renaming nt can be inserted into tn *)
 let rename_outputs_if_possible env nt tn prop = match nt, tn with
-  | (NTConcl pdt, TreeNode (NTConcl refpdt, _, _)) -> 
+  | (NTConcl pdt, TreeNode (NTConcl refpdt, _, _, _ )) -> (*cath*)
     let ts, refts = get_in_terms_func env pdt, get_in_terms_func env refpdt in
     let mapping = find_renaming ts refts in
     (rename_nt mapping nt, rename_prop mapping prop)
   |          ( NTPrem ((MLTFun(i, _, m),_)as t),
-    TreeNode ( (NTPrem ((MLTFun(ri, _, rm),_) as rt),_,_) )) 
+    TreeNode ( (NTPrem ((MLTFun(ri, _, rm),_) as rt),_,_, _ ) )) (*cath*) 
                                                     when (i = ri && m = rm) ->
     let ts, refts = get_out_terms_func env t, get_out_terms_func env rt in
     let mapping = find_renaming ts refts in
@@ -595,9 +602,9 @@ let rename_outputs_if_possible env nt tn prop = match nt, tn with
 let rename_inputs_if_possible env nt tn prop =  match nt, tn with
   | NTConcl _, _ -> (nt, prop) (* nothing to do *)
   |          ( NTPrem (((MLTFun(i,a,m)|MLTFunNot(i,a,m)),_) as t),
-   TreeOutput ( (NTPrem (((MLTFun(ri,ra,rm)|MLTFunNot(ri,ra,rm)),_) as rt)),_,_) )
+   TreeOutput ( (NTPrem (((MLTFun(ri,ra,rm)|MLTFunNot(ri,ra,rm)),_) as rt)),_,_, _) ) (*cath*)
   |          ( NTPrem (((MLTFun(i,a,m)|MLTFunNot(i,a,m)),_) as t),
-    TreeNode ( (NTPrem (((MLTFun(ri,ra,rm)|MLTFunNot(ri,ra,rm)),_) as rt),_,_) ))
+    TreeNode ( (NTPrem (((MLTFun(ri,ra,rm)|MLTFunNot(ri,ra,rm)),_) as rt),_,_, _) )) (*cath*)
                                                          when i=ri && m=rm ->
     let ts, refts = get_in_terms_func env t, get_in_terms_func env rt in
     let mapping = find_renaming ts refts in
@@ -626,8 +633,8 @@ let test_det_nt env nt1 nt2 =
 (* determinism test between nt and first nt of each tn *)
 let test_det env nt tnl = List.for_all
   (fun tn -> let nt2 = (match tn with
-    | TreeNode (nt, _, _) -> nt
-    | TreeOutput (nt, _, _) -> nt 
+    | TreeNode (nt, _, _, _) -> nt (*cath*)
+    | TreeOutput (nt, _, _, _) -> nt (*cath*)
                         ) in test_det_nt env nt nt2) tnl
 
 (* Return true if t1 is an instance of t2, false else. *)
@@ -665,7 +672,7 @@ let rec included l1 l2 = match l1 with
 
 (* Mode coherency analysis for a node_type *)
 (* Check that all variables needed by nt are known *)
-(* Don't chack anything for conclusion nodes, mca_check_output must be used
+(* Don't check anything for conclusion nodes, mca_check_output must be used
    for the output node *)
 let mca_check env kv nt = match nt with
   | NTConcl _ -> true
@@ -754,7 +761,7 @@ let normalize_and_or prem = let rec norm_rec prem = match prem with
 (* check if a node_type can be safely inserted in a treenode list *)
 let check_insertable nt tnl = match tnl with
   | [] -> true
-  | (TreeOutput(nt', _, _) | TreeNode(nt', _, _))::_ -> match (nt, nt') with
+  | (TreeOutput(nt', _, _, _) | TreeNode(nt', _, _, _))::_ -> match (nt, nt') with (*cath*)
     | NTConcl ((MLTFun (f, _, m) | MLTFunNot (f, _, m)),_),
       NTConcl ((MLTFun (f', _, m') | MLTFunNot (f', _, m')),_)
     | NTPrem ((MLTFun (f, _, m) | MLTFunNot (f, _, m)),_),
@@ -767,23 +774,25 @@ let rec insert_output env id_spec pm_n kv nt prop tnl =
   if not (check_insertable nt tnl)
   then [] (* check logical terms compatibility *)
   else 
- if (mca_check env kv nt) && (mca_check_prem_output env kv nt) then
+ if (mca_check env kv nt) (* && (mca_check_prem_output env kv nt) *)
+ (*cath*)
+then
   try let (nt, prop) = match tnl with (* rename inputs (matching term) *)
     | tn::_ -> rename_inputs_if_possible env nt tn prop
     | [] -> (nt, prop) in
-  let tn = TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n) in
+  let tn = TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n, kv) in (*cath*)
   let rec io_rec tnl = match tnl with (* try to insert tn in the right place *)
-    | [] -> [[TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n)]]
+    | [] -> [[TreeOutput (nt, prop.prop_concl, mk_an prop.prop_name pm_n, kv)]] (*cath*)
       (* we can always insert at the end because 
                                         all the tests have been done before *)
-    | ((TreeOutput (nti, _, _) | (TreeNode (nti, _, _))) as tni)::tntl ->
+    | ((TreeOutput (nti, _, _, _) | (TreeNode (nti, _, _, _))) as tni)::tntl -> (*cath*)
       if nt_partial_ordering env id_spec nti nt then 
                                (* nti still < nt, continue *)
         List.map (fun ntnl -> tni::ntnl) (io_rec tntl)
       else
         (* nt must be inserted *)
        let test_tail tni = match tni with
-         | TreeNode (nti, _, _) | TreeOutput (nti, _, _) ->
+         | TreeNode (nti, _, _, _) | TreeOutput (nti, _, _, _) -> (*cath*)
             nt_partial_ordering env id_spec nt nti in
         if List.for_all test_tail tnl then [tn::tnl]
         else []
@@ -800,31 +809,31 @@ let rec insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl =
     match tnl_acc with
       | [] -> (* no matching nt, insert alone *)
         let kv' = mca_add_vars env kv nt in
-        List.map (fun nchild -> [TreeNode (nt, nchild, mk_an prop.prop_name pm_n)])
+        List.map (fun nchild -> [TreeNode (nt, nchild, mk_an prop.prop_name pm_n, kv)]) (*cath*)
           (choose_prop_prem env id_spec prem_selector kv' prop [])
-      | (TreeNode (nti, child, ani) as tni)::acc_tail -> 
+      | (TreeNode (nti, child, ani, _) as tni)::acc_tail -> (*cath*)
         if nt_partial_ordering env id_spec nti nt then
           (* nti still < nt, continue *)
           List.map (fun tnl -> tni::tnl) (ir_rec acc_tail)
         else 
           let test_tail tn = match tn with
-          | TreeNode (nti, _, _) | TreeOutput (nti, _, _) -> 
+          | TreeNode (nti, _, _, _) | TreeOutput (nti, _, _, _) -> (*cath*)
             nt_partial_ordering env id_spec nt nti in
         if List.for_all test_tail tnl_acc then
           (* nt can be inserted alone, before tni *)
           let kv' = mca_add_vars env kv nt in
           List.map ( fun nchild -> 
-              (TreeNode (nt, nchild, mk_an prop.prop_name pm_n))::tnl_acc )
+              (TreeNode (nt, nchild, mk_an prop.prop_name pm_n, kv))::tnl_acc ) (*cath*)
             (choose_prop_prem env id_spec prem_selector kv' prop [])
         else (* try to insert nt into tni *)
         ( try let rnt, rprop = rename_outputs_if_possible env nt tni prop in
           let kv' = mca_add_vars env kv rnt in
           List.map ( fun nchild -> 
-              (TreeNode (nti, nchild, an_add_prop ani prop.prop_name pm_n))::
+              (TreeNode (nti, nchild, an_add_prop ani prop.prop_name pm_n, kv)):: (*cath*)
                 acc_tail )
             (choose_prop_prem env id_spec prem_selector kv' rprop child)
          with Failure "impossible" -> [])
-      | (TreeOutput(nti, _, _) as tni)::acc_tail -> 
+      | (TreeOutput(nti, _, _, _) as tni)::acc_tail -> (*cath*)
         if nt_partial_ordering env id_spec nti nt then
           List.map (fun tnl -> tni::tnl) (ir_rec acc_tail)
         else []
@@ -837,7 +846,8 @@ let rec insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl =
 and insert_prem_term env id_spec prem_selector pm_n kv nt prop tnl =
   if not (check_insertable nt tnl) then []
   else 
-  if (mca_check env kv nt) && (mca_check_prem_output env kv nt) then
+  if (mca_check env kv nt) (* cath && (mca_check_prem_output env kv nt) *)
+then
     try let nt, prop = rename_inputs_if_needed env nt tnl prop in
       insertion_recursor env id_spec prem_selector pm_n prop kv nt tnl
     with Failure "impossible" -> []
@@ -947,9 +957,9 @@ let gen_tuple_pat env terms_list orig_nt = match terms_list with
   | [t] -> gen_term_pat t
   | _ -> fake_type env (MLPTuple (List.map gen_term_pat terms_list))
 
-
+let lin_pat_new pat vars i kv lins =  
 let rec lin_pat pat vars i lins = match pat with
-  | MLPVar v, ty -> if included [v] vars then
+  | MLPVar v, ty -> if included [v] vars || List.mem v kv then
     let nv = v ^ "_" ^ (string_of_int i) in
       ((MLPVar nv, ty), vars, i+1, ((MLTVar v, ty), (MLTVar nv, ty))::lins)
     else ((MLPVar v, ty), v::vars, i, lins)
@@ -972,6 +982,7 @@ let rec lin_pat pat vars i lins = match pat with
     ) pl ([], vars, i, lins) in
     ((MLPConstr (id, npatl), ty), nvars, ni, nlins)
   | _ -> (pat, vars, i, lins)
+in lin_pat pat vars i lins
 
 let rec select_out_args_types types mode = match types, mode with
   | (_::tl_ty, MInput::tl_mode) -> select_out_args_types tl_ty tl_mode
@@ -1005,9 +1016,11 @@ let gen_match_term env id_extr nt = match nt with
           end
         | _ -> notype (LFun (pn, in_terms)) *)
   | _ -> assert false
-let gen_pat_term env nt next_term an = 
+
+let gen_pat_term env nt_kv next_term an =
+let (nt, kv) = nt_kv in  (*cath*)
   let (pat, _, _, lins) = 
-       lin_pat (gen_tuple_pat env (get_out_terms env nt) nt) [] 1 [] in
+       lin_pat_new (gen_tuple_pat env (get_out_terms env nt) nt) [] 1 kv [] in (*cath*)
   if List.length lins > 0 then
     (pat, fake_type env (MLTMatch (fake_type env (MLTALin lins), an, 
       [(fake_type env MLPATrue, next_term, an);
@@ -1018,15 +1031,15 @@ let gen_pat_term env nt next_term an =
 let default_case env = [(fake_type env MLPWild, fake_type env MLTADefault, [])]
 
 let rec gen_pat env id_extr tn = match tn with
-  | TreeNode (nt, tnl, an) -> gen_pat_term env nt (gen_match env id_extr tnl) an
-  | TreeOutput (nt, mlt, an) -> 
-    gen_pat_term env nt (gen_tuple env (get_out_terms_func env mlt)) an
+  | TreeNode (nt, tnl, an, kv) -> gen_pat_term env (nt,kv) (gen_match env id_extr tnl) an (*cath*)
+  | TreeOutput (nt, mlt, an, kv) -> 
+    gen_pat_term env (nt, kv) (gen_tuple env (get_out_terms_func env mlt)) an (*cath*)
 
 and gen_match env id_extr tree = match List.hd tree with
-  | TreeNode (nt, _, _) | TreeOutput (nt, _, _) ->
+  | TreeNode (nt, _, _, _) | TreeOutput (nt, _, _, _) -> (*cath*)
     let mt = gen_match_term env id_extr nt in
     let an = flatmap
-      (function | TreeNode (_, _, an) | TreeOutput (_, _, an) -> an) tree in
+      (function | TreeNode (_, _, an, _) | TreeOutput (_, _, an, _) -> an) tree in (*cath*)
     fake_type env (MLTMatch (mt, an, 
       (List.map (gen_pat env id_extr) tree)@(default_case env)))
     

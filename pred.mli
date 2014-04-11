@@ -123,6 +123,7 @@ and 'htyp ml_term = ('htyp untyped_ml_term, 'htyp) typed
 val pp_ml_term : 'htyp ml_term -> string
 (*DEBUG*)
 val pp_ml_pat : 'htyp ml_pat -> string
+val pp_ml_untyped_term : string -> 'htyp untyped_ml_term -> string
 
 
 (******************)

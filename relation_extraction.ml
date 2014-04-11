@@ -102,8 +102,9 @@ let extract_relation_common dep ord ind_ref modes rec_style =
     | RelationExtractionProp (None, s) -> errorlabstrm "RelationExtraction"
       (str ("Extraction failed: " ^ s))
   in
+ (*Printf.eprintf "%s\n" (pp_extract_env env); *)
   let env = Pred.make_ml_funs env in
-  (*Printf.eprintf "%s\n" (pp_extract_env env);*)
+  (* Printf.eprintf "%s\n" *)
   env
 
 let extract_relation_miniml dep ord ind_ref modes =

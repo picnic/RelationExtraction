@@ -11,7 +11,8 @@ Inductive expr : Set :=
   | ESucc : expr -> expr
   | EVar : ident -> expr
   | ETrue : expr
-  | EFalse : expr.
+  | EFalse : expr
+  | EIf : expr -> expr -> expr -> expr.
 
 Inductive instr : Set :=
   | Boucle : expr -> instr -> instr
@@ -50,16 +51,20 @@ Fixpoint modif_env (i : ident) (v : val) (env:envi) : envi :=
 
 Fixpoint get_var (i : ident) (env:envi) :=
   match env with
-    | Env i2 v2 env => if eq_id i i2 then v2 else
+    | Env i2 v2 env => if eq_id i i2 then Some v2 else
       get_var i env
-    | EnvEmpty => VFalse
+    | EnvEmpty => None
   end.
 
 Inductive eval : expr -> envi -> val -> Prop :=
   | evalZero : forall env, eval EZero env VZero
   | evalTrue : forall env, eval ETrue env VTrue
   | evalFalse : forall env, eval EFalse env VFalse
-  | evalVar : forall env v, eval (EVar v) env (get_var v env)
+  | evalVar : forall env i v,  (get_var i env) = Some v -> eval (EVar i) env v
+  | evalIfZ : forall n v n1 n2 env, eval n env VZero  -> eval n2 env v  -> 
+               eval (EIf n n1 n2) env v  
+  | evalIfNZ : forall m p v n1 n2 env , eval m env (VSucc p)  -> eval n1 env v -> 
+               eval (EIf m n1 n2) env v  
   | evalSucc : forall n v env, eval n env v -> eval (ESucc n) env (VSucc v).
 
 Inductive exec : instr -> envi -> envi -> Prop :=
@@ -72,32 +77,34 @@ Inductive exec : instr -> envi -> envi -> Prop :=
   | execWhileFalse : forall e i env, eval e env VFalse -> exec (Boucle e i) env env.
 
 Extraction Relation eval [1 2] with exec [1 2].
-Extraction empty_env.
+
 
 Inductive type : Set :=
  | TBool : type
- | TInt : type
- | TError : type.
+ | TInt : type.
 
-Fixpoint get_type (g:envi) (e:expr) := match e with
-  | EVar var => match get_var var g with
-    | VZero => Some TInt
-    | VSucc _ => Some TInt
-    | VTrue => Some TBool
-    | _ => None
-   end
-  | _ => None
-end.
+Inductive envt : Set :=
+  | EnvtEmpty : envt
+  | Envt : ident -> type -> envt -> envt.
 
-Inductive typecheck : envi -> expr -> type -> Prop :=
-| c_varerror : forall g x, get_type g (EVar x) = None ->
-          typecheck g (EVar x) TError
-| c_var : forall g x t, get_type g (EVar x) = Some t ->
-          typecheck g (EVar x) t.
+Definition empty_envt : envt := EnvtEmpty.
 
-Extraction option.
-Extraction type.
-Extraction get_type.
-Extraction Relation Single typecheck [1 2].
+Fixpoint get_type_var (i : ident) (env:envt) :=
+  match env with
+    | Envt i2 v2 env => if eq_id i i2 then Some v2 else
+      get_type_var i env
+    | EnvtEmpty => None
+  end.
 
+Inductive typecheck : envt -> expr -> type -> Prop :=
+| tc_var : forall env x t, get_type_var x env = Some t ->
+          typecheck env (EVar x) t
+  | tc_Zero : forall env, typecheck env EZero TInt
+  | tc_True : forall env, typecheck env ETrue  TBool
+  | tc_False : forall env, typecheck env EFalse  TBool
+  | tc_if : forall n v n1 n2 env, typecheck env n TInt  -> 
+              typecheck env n2  v  -> typecheck env n1 v ->   typecheck env (EIf n n1 n2)  v  
+  | tc_Succ : forall n  env, typecheck env n TInt -> typecheck env (ESucc n)  TInt.
+
+Extraction Relation  typecheck [1 2].
 

@@ -102,7 +102,7 @@ let rec gen_constr (env, id) fn bind (fterm,_) = match fterm with
     let args = Array.of_list (List.map (gen_constr (env,id) fn bind) tl) in
     mkApp (c, args)
   | FixFunNot _ -> 
-    anomalylabstrm "RelationExtraction" (str "Not: Not implanted yet")
+    anomalylabstrm "RelationExtraction" (str "Not: Not yet implanted ")
   | FixCase ((_, (_, Some sty)) as t, _, iltl) -> 
     let ind, oib = match kind_of_term sty with
       | App (c,_) -> (match kind_of_term c with

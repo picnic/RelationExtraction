@@ -15,14 +15,8 @@ Inductive expr : Set :=
   | EVar : ident -> expr
   | ETrue : expr
   | EFalse : expr
-  | EInc : ident -> expr.
-
-Inductive instr : Set :=
-  | Boucle : expr -> instr -> instr
-  | Skip : instr
-  | Sequ : instr -> instr -> instr
-  | Affect : ident -> expr -> instr
-  | If : expr -> instr -> instr -> instr
+  | EInc : ident -> expr
+  | If : expr -> expr -> expr -> expr
 .
 
 Inductive val : Set :=
@@ -65,6 +59,10 @@ Inductive eval : expr -> envi -> val -> envi -> Prop :=
   | evalFalse : forall env, eval EFalse env VFalse env
   | evalVar : forall env v, eval (EVar v) env (get_var v env) env
   | evalSucc : forall n v env env', eval n env v env' -> eval (ESucc n) env (VSucc v) env'
+  | evalIfZ : forall n v n1 n2 env env' env2, eval n env VZero env' -> eval n2 env' v env2 -> 
+               eval (If n n1 n2) env v env2 
+  | evalIfNZ : forall m p v n1 n2 env env' env1, eval m env (VSucc p) env' -> eval n1 env' v env1 -> 
+               eval (If m n1 n2) env v env1 
   | evalInc : forall v env, eval (EInc v) env (get_var v env) (modif_env v (VSucc (get_var v env)) env).
 
 (*Extraction bool.
