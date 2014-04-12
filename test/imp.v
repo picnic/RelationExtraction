@@ -76,8 +76,7 @@ Inductive exec : instr -> envi -> envi -> Prop :=
   | execWhileTrue : forall e i env env1 env2, eval e env VTrue -> exec i env env1 -> exec (Boucle e i) env1 env2 -> exec (Boucle e i) env env2
   | execWhileFalse : forall e i env, eval e env VFalse -> exec (Boucle e i) env env.
 
-Extraction Relation eval [1 2] with exec [1 2].
-
+Extraction Relation (eval [1 2]) (exec [1 2]).
 
 Inductive type : Set :=
  | TBool : type
@@ -96,6 +95,7 @@ Fixpoint get_type_var (i : ident) (env:envt) :=
     | EnvtEmpty => None
   end.
 
+
 Inductive typecheck : envt -> expr -> type -> Prop :=
 | tc_var : forall env x t, get_type_var x env = Some t ->
           typecheck env (EVar x) t
@@ -106,5 +106,5 @@ Inductive typecheck : envt -> expr -> type -> Prop :=
               typecheck env n2  v  -> typecheck env n1 v ->   typecheck env (EIf n n1 n2)  v  
   | tc_Succ : forall n  env, typecheck env n TInt -> typecheck env (ESucc n)  TInt.
 
-Extraction Relation  typecheck [1 2].
+Extraction Relation Single (typecheck [1 2]).
 

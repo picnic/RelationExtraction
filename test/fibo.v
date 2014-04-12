@@ -6,5 +6,4 @@ Inductive fibo : nat -> nat -> Prop :=
          a = S (S n) -> fibo a (plus r1 r2)
 | cbase : forall a, (a = O) \/ (a = S O) -> fibo a (S O).
 
-Extraction Relation fibo [1].
-
+Extraction Relation (fibo [1]).

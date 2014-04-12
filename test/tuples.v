@@ -65,15 +65,5 @@ Inductive eval : expr -> envi -> val -> envi -> Prop :=
                eval (If m n1 n2) env v env1 
   | evalInc : forall v env, eval (EInc v) env (get_var v env) (modif_env v (VSucc (get_var v env)) env).
 
-(*Extraction bool.
-Extraction ident.
-Extraction expr.
-Extraction instr.
-Extraction val.
-Extraction envi.
-Extraction eq_id.
-Extraction empty_env.
-Extraction modif_env.
-Extraction get_var.*)
 
-Extraction Relation eval [1 2].
+Extraction Relation (eval [1 2]).

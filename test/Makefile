@@ -8,7 +8,7 @@ COQC=$(COQBIN)coqc
 # make clean    clean temp files
 ##############################################################################
 
-TESTS=add.v imp.v fibo.v so.v odd.v tuples.v
+TESTS=add.v imp.v fibo.v so.v odd.v tuples.v extrcommand.v
 COQC_FILE=$(shell which $(COQC))
 ML_TESTS=$(subst .v,.ml,$(TESTS))
 ML_TESTS_OBJ=$(subst .v,.cmo,$(TESTS))

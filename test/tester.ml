@@ -47,6 +47,12 @@ let res =
     assert (Odd.odd_full (Odd.S Odd.O) = true);
     assert (Odd.odd_full (Odd.S (Odd.S Odd.O)) = false);
 
+    (* Names in extraction commands *)
+    assert (Extrcommand.ev (Extrcommand.S (Extrcommand.S Extrcommand.O)) = true);
+    assert (Extrcommand.ev (Extrcommand.S Extrcommand.O) = false);
+    assert (Extrcommand.od (Extrcommand.S Extrcommand.O) = true);
+    assert (Extrcommand.od (Extrcommand.S (Extrcommand.S Extrcommand.O)) = false);
+
     (* Output tuples *)
     assert (Tuples.eval12 (Tuples.EInc Tuples.A) 
       (Tuples.Env (Tuples.A, Tuples.VZero, Tuples.EnvEmpty)) = 
