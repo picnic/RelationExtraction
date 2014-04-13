@@ -74,7 +74,7 @@ If a termination hint is provided, it may be one of the following:
 decreasing at each recursive call. 
 
 
-The same convention for names of extracted functions as in Ocaml applies in Coq. 
+The same convention for names of extracted functions as in OCaml applies in Coq. 
 To see the extracted functions, use Print.
 
 For the moment, soundness proofs are produced in the simplest cases (see [1] for further details). 
