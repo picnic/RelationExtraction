@@ -17,6 +17,8 @@ Inductive pc : nat -> nat -> nat_prod -> Prop :=
 | pc4 : forall a, pc O a (P O O).
 
 Extraction Relation Fixpoint Relaxed (pc [1 2]) (add [1 2]).
-Print pc12.
-Check pc12_correct.
 
+Lemma pc12_check : forall (p1 p2 : nat) (po : nat_prod), pc12 p1 p2 = po -> pc p1 p2 po.
+Proof.
+apply pc12_correct.
+Qed.

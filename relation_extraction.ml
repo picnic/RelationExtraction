@@ -152,7 +152,6 @@ let relation_extraction_fixpoint modes =
 let relation_extraction_fixpoint_order modes =
   let ind_refs = List.map (fun (_, ind_ref, _, _) -> ind_ref) modes in
   let env = extract_relation_common false true ind_refs modes in
-  let ids = List.map fst env.extr_mlfuns in
   let env = build_all_fixfuns env in
   gen_fixpoint env
 

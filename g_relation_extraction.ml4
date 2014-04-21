@@ -67,7 +67,7 @@ END
 
 
 VERNAC COMMAND EXTEND ExtractionRelationFixpoint
-| [ "Extraction" "Relation" "Fixpoint" mode(mde) modewithrec_list(modes) ] ->
+| [ "Extraction" "Relation" "Fixpoint" modewithrec_list(modes) ] ->
   [ relation_extraction_fixpoint modes ]
 END
 
