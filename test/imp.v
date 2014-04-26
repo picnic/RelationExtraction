@@ -1,6 +1,10 @@
 Add LoadPath "..".
 Declare ML Module "relation_extraction_plugin".
 
+Inductive bool : Set :=
+  | True : bool
+  | False : bool.
+
 Inductive ident : Set :=
   | A : ident
   | B : ident
@@ -19,8 +23,7 @@ Inductive instr : Set :=
   | Skip : instr
   | Sequ : instr -> instr -> instr
   | Affect : ident -> expr -> instr
-  | If : expr -> instr -> instr -> instr
-.
+  | If : expr -> instr -> instr -> instr.
 
 Inductive val : Set :=
   | VTrue : val
@@ -35,10 +38,10 @@ Inductive envi : Set :=
 Definition empty_env : envi := EnvEmpty.
 
 Definition eq_id i1 i2 := match (i1, i2) with
-  | (A, A) => true
-  | (B, B) => true
-  | (C, C) => true
-  | _ => false
+  | (A, A) => True
+  | (B, B) => True
+  | (C, C) => True
+  | _ => False
 end.
 
 
@@ -77,6 +80,7 @@ Inductive exec : instr -> envi -> envi -> Prop :=
   | execWhileFalse : forall e i env, eval e env VFalse -> exec (Boucle e i) env env.
 
 Extraction Relation (eval [1 2]) (exec [1 2]).
+Extraction empty_env.
 
 Inductive type : Set :=
  | TBool : type
@@ -90,15 +94,16 @@ Definition empty_envt : envt := EnvtEmpty.
 
 Fixpoint get_type_var (i : ident) (env:envt) :=
   match env with
-    | Envt i2 v2 env => if eq_id i i2 then Some v2 else
-      get_type_var i env
+    | Envt i2 v2 env => match eq_id i i2 with
+      | True => Some v2
+      | False => get_type_var i env end
     | EnvtEmpty => None
   end.
 
 
 Inductive typecheck : envt -> expr -> type -> Prop :=
-| tc_var : forall env x t, get_type_var x env = Some t ->
-          typecheck env (EVar x) t
+  | tc_var : forall env x t, get_type_var x env = Some t ->
+             typecheck env (EVar x) t
   | tc_Zero : forall env, typecheck env EZero TInt
   | tc_True : forall env, typecheck env ETrue  TBool
   | tc_False : forall env, typecheck env EFalse  TBool
@@ -106,5 +111,8 @@ Inductive typecheck : envt -> expr -> type -> Prop :=
               typecheck env n2  v  -> typecheck env n1 v ->   typecheck env (EIf n n1 n2)  v  
   | tc_Succ : forall n  env, typecheck env n TInt -> typecheck env (ESucc n)  TInt.
 
+Extraction type.
+Extraction envt.
+Extraction get_type_var.
 Extraction Relation Single (typecheck [1 2]).
 

@@ -26,9 +26,9 @@ let res =
                  Imp.ESucc ( Imp.EVar Imp.A)), Imp.Affect (Imp.B, Imp.EFalse)))
     )) in
     let res = Imp.exec12 prog Imp.empty_env in
-    assert (Imp.get_var Imp.A res = Imp.VSucc (Imp.VSucc Imp.VZero));
-    assert (Imp.typecheck12 res (Imp.EVar Imp.A) = Imp.TInt);
-    assert (Imp.typecheck12 res (Imp.EVar Imp.B) = Imp.TError); 
+    assert (Imp.get_var Imp.A res = Imp.Some (Imp.VSucc (Imp.VSucc Imp.VZero)));
+    assert (Imp.typecheck12 Imp.EnvtEmpty (Imp.ESucc Imp.EZero) = Imp.TInt);
+    assert (Imp.typecheck12 Imp.EnvtEmpty Imp.EFalse = Imp.TBool); 
 
     (* Fibonacci *)
     assert (Fibo.fibo1 (Fibo.S (Fibo.S (Fibo.S (Fibo.S Fibo.O)))) = 
