@@ -2,7 +2,7 @@
 -custom "
 #the following is inserted verbatim
 
-all: $(RELEXTR_PLUGIN).cma $(RELEXTR_PLUGIN).cmxs
+all: .git/hooks/pre-commit $(RELEXTR_PLUGIN).cma $(RELEXTR_PLUGIN).cmxs
 
 clean: clean-plugin
 
@@ -10,6 +10,11 @@ clean-plugin:
 	rm -f $(RELEXTR_PLUGIN).a
 
 test: $(RELEXTR_PLUGIN).cma $(RELEXTR_PLUGIN).cmxs
+
+.git/hooks/pre-commit: git-hooks/pre-commit
+	cp git-hooks/pre-commit .git/hooks/
+	chmod +x .git/hooks/pre-commit
+
 
 #end verbatim
 " "" ""

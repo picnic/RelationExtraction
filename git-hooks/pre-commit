@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "RUNNING TESTS BEFORE COMMIT..."
+make test
